@@ -1,6 +1,7 @@
 mod app;
 mod ui;
 mod audio;
+mod config;
 
 use tokio::sync::mpsc;
 use crate::app::{AppMessage, UICommand};
@@ -20,6 +21,8 @@ fn load_tray_icon() -> Icon {
 async fn main() {
     let (tx, rx) = mpsc::unbounded_channel::<AppMessage>();
     let (tx_cmd, mut rx_cmd) = mpsc::unbounded_channel::<UICommand>();
+    
+    let app_config = config::AppConfig::load_or_create();
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -118,7 +121,7 @@ async fn main() {
                 }
             });
 
-            Ok(Box::new(ui::MixerApp::new(rx, tx_cmd, tray_icon)))
+            Ok(Box::new(ui::MixerApp::new(rx, tx_cmd, tray_icon, app_config)))
         }),
     );
 }

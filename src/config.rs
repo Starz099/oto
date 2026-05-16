@@ -1,0 +1,93 @@
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+use directories::ProjectDirs;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfig {
+    pub hotkeys: Hotkeys,
+    pub settings: Settings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Hotkeys {
+    pub toggle_overlay: String,
+    pub nav_up: String,
+    pub nav_down: String,
+    pub vol_decrease: String,
+    pub vol_increase: String,
+    pub vol_decrease_fast: String,
+    pub vol_increase_fast: String,
+    pub mute: String,
+    pub jump_top: String,
+    pub jump_bottom: String,
+    // pub pin: String,
+    pub accordion_open: String,
+    pub accordion_close: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
+    pub normal_step_percent: f32,
+    pub fast_step_percent: f32,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            hotkeys: Hotkeys {
+                toggle_overlay: "BackQuote".to_string(),
+                nav_up: "J".to_string(),
+                nav_down: "K".to_string(),
+                vol_decrease: "H".to_string(),
+                vol_increase: "L".to_string(),
+                vol_decrease_fast: "Shift+H".to_string(),
+                vol_increase_fast: "Shift+L".to_string(),
+                mute: "M".to_string(),
+                jump_top: "GG".to_string(),
+                jump_bottom: "G".to_string(),
+                // pub pin: String,
+                accordion_open: "Enter".to_string(),
+                accordion_close: "Escape".to_string(),
+            },
+            settings: Settings {
+                normal_step_percent: 2.0,
+                fast_step_percent: 10.0,
+            },
+        }
+    }
+}
+
+impl AppConfig {
+    fn get_config_path() -> Option<PathBuf> {
+        if let Some(proj_dirs) = ProjectDirs::from("com", "RawMixer", "RawMixer") {
+            let config_dir = proj_dirs.config_dir();
+            if !config_dir.exists() {
+                let _ = fs::create_dir_all(config_dir);
+            }
+            Some(config_dir.join("config.json"))
+        } else {
+            None
+        }
+    }
+
+    pub fn load_or_create() -> Self {
+        if let Some(path) = Self::get_config_path() {
+            if path.exists() {
+                if let Ok(config_str) = fs::read_to_string(&path) {
+                    if let Ok(config) = serde_json::from_str(&config_str) {
+                        return config;
+                    }
+                }
+            }
+            
+            let default_config = Self::default();
+            if let Ok(json_str) = serde_json::to_string_pretty(&default_config) {
+                let _ = fs::write(path, json_str);
+            }
+            default_config
+        } else {
+            Self::default()
+        }
+    }
+}
