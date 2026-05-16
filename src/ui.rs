@@ -2,25 +2,9 @@ use eframe::egui;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::app::{AppMessage, AudioProcess, UICommand};
 
-pub fn run_overlay(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>) {
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_decorations(false)
-            .with_transparent(true)
-            .with_always_on_top()
-            .with_inner_size([450.0, 350.0]),
-        ..Default::default()
-    };
-
-    let _ = eframe::run_native(
-        "Raw Mixer Overlay", 
-        native_options, 
-        Box::new(|_cc| Ok(Box::new(MixerApp::new(rx, tx_cmd))))
-    );
-}
-
 pub struct MixerApp {
     initialized: bool,
+    is_visible: bool,
     sessions: Vec<AudioProcess>,
     rx: UnboundedReceiver<AppMessage>,
     tx_cmd: UnboundedSender<UICommand>,
@@ -30,6 +14,7 @@ impl MixerApp {
     pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>) -> Self {
         Self {
             initialized: false,
+            is_visible: true,
             sessions: Vec::new(),
             rx,
             tx_cmd,
@@ -48,8 +33,46 @@ impl eframe::App for MixerApp {
                 AppMessage::UpdateSessions(sessions) => {
                     self.sessions = sessions;
                 }
+                AppMessage::ToggleOverlay => {
+                    self.is_visible = !self.is_visible;
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Visible(self.is_visible));
+                    println!("Overlay visibility toggled: {}", self.is_visible);
+                    if self.is_visible {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Focus);
+                        if let Some(monitor_size) = ui.ctx().input(|i| i.viewport().monitor_size) {
+                            let center_pos = egui::pos2(
+                                (monitor_size.x - 450.0) / 2.0,
+                                (monitor_size.y - 350.0) / 2.0,
+                            );
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::OuterPosition(center_pos));
+                        }
+                    }
+                }
             }
         }
+
+        let mut hide_requested = false;
+        ui.input(|i| {
+            // Standard UX: Escape key should always minimize overlays
+            if i.key_pressed(egui::Key::Escape) {
+                hide_requested = true;
+            }
+            
+            // Check if Tilde/Backtick was pressed
+            for event in &i.events {
+                if let egui::Event::Text(text) = event {
+                    if text.contains('`') || text.contains('~') {
+                        hide_requested = true;
+                    }
+                }
+            }
+        });
+
+        if hide_requested {
+            self.is_visible = false;
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
+
 
         if !self.initialized {
             let mut visuals = egui::Visuals::dark();
@@ -59,7 +82,8 @@ impl eframe::App for MixerApp {
                 offset: [0, 0],
                 blur: 0,
                 spread: 0,
-                color: egui::Color32::TRANSPARENT,            };
+                color: egui::Color32::TRANSPARENT,
+            };
             visuals.window_shadow = no_shadow;
             visuals.popup_shadow = no_shadow;
 

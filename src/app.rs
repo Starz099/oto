@@ -6,7 +6,8 @@ pub struct AudioProcess {
 }
 
 pub enum AppMessage {
-    UpdateSessions(Vec<AudioProcess>)
+    UpdateSessions(Vec<AudioProcess>),
+    ToggleOverlay,
 }
 
 pub enum UICommand {
