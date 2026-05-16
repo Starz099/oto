@@ -1,5 +1,12 @@
+#[derive(Clone, Debug)]
+pub struct AudioProcess {
+    pub pid: u32,
+    pub name: String,
+    pub volume: f32,
+}
+
 pub enum AppMessage {
-    UpdateStarzVolume(f32), 
+    UpdateSessions(Vec<AudioProcess>)
 }
 
 pub enum UICommand {

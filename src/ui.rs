@@ -1,6 +1,6 @@
 use eframe::egui;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use crate::app::{AppMessage, UICommand};
+use crate::app::{AppMessage, AudioProcess, UICommand};
 
 pub fn run_overlay(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>) {
     let native_options = eframe::NativeOptions {
@@ -21,8 +21,7 @@ pub fn run_overlay(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UI
 
 pub struct MixerApp {
     initialized: bool,
-    starz_vol: f32,
-    sys_vol: f32,
+    sessions: Vec<AudioProcess>,
     rx: UnboundedReceiver<AppMessage>,
     tx_cmd: UnboundedSender<UICommand>,
 }
@@ -31,8 +30,7 @@ impl MixerApp {
     pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>) -> Self {
         Self {
             initialized: false,
-            starz_vol: 56.0,
-            sys_vol: 100.0,
+            sessions: Vec::new(),
             rx,
             tx_cmd,
         }
@@ -47,8 +45,8 @@ impl eframe::App for MixerApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
-                AppMessage::UpdateStarzVolume(new_vol) => {
-                    self.starz_vol = new_vol;
+                AppMessage::UpdateSessions(sessions) => {
+                    self.sessions = sessions;
                 }
             }
         }
@@ -57,6 +55,14 @@ impl eframe::App for MixerApp {
             let mut visuals = egui::Visuals::dark();
             visuals.panel_fill = egui::Color32::TRANSPARENT;
             visuals.window_fill = egui::Color32::TRANSPARENT;
+            let no_shadow = egui::epaint::Shadow {
+                offset: [0, 0],
+                blur: 0,
+                spread: 0,
+                color: egui::Color32::TRANSPARENT,            };
+            visuals.window_shadow = no_shadow;
+            visuals.popup_shadow = no_shadow;
+
             ui.ctx().set_visuals(visuals);
             
             if let Some(monitor_size) = ui.ctx().input(|i| i.viewport().monitor_size) {
@@ -71,9 +77,15 @@ impl eframe::App for MixerApp {
         }
 
         let panel_frame = egui::Frame::new()
-            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 30, 200)) 
+            .fill(egui::Color32::from_rgba_unmultiplied(80, 70, 90, 240)) 
             .corner_radius(15.0)
-            .inner_margin(15.0);
+            .inner_margin(15.0)
+            .shadow(egui::epaint::Shadow { 
+                offset: [0, 0],
+                blur: 0, 
+                spread: 0, 
+                color: egui::Color32::TRANSPARENT 
+            });
 
         egui::CentralPanel::default().frame(panel_frame).show_inside(ui, |ui| {
             let app_rect = ui.max_rect();
@@ -82,36 +94,27 @@ impl eframe::App for MixerApp {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
             }
 
-            ui.heading(egui::RichText::new("Raw Mixer Control")
+            ui.heading(egui::RichText::new("Raw Mixer")
             .size(24.0)
             .color(egui::Color32::WHITE));
             ui.separator();
-            
-            ui.add_space(10.0);
-            ui.label("Global Push-To-Talk: [ACTIVE]");
-            
-            ui.add_space(20.0);
-            ui.heading("Active VC: Sharma ka bhukkad parivar");
-            
-            ui.horizontal(|ui| {
-                ui.label("Starz");
-                let mut vol = self.starz_vol;
-                ui.add(egui::Slider::new(&mut vol, 0.0..=200.0).text("%"));
-                self.starz_vol = vol;
-            });
+                                    
             ui.add_space(40.0);
 
-        ui.horizontal(|ui| {
-            ui.label("System Sounds (PID: 0)");
-            
-            let slider_response = ui.add(egui::Slider::new(&mut self.sys_vol, 0.0..=100.0).text("%"));
-            
-            if slider_response.drag_stopped() {
-                let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
-                    pid: 0, 
-                    volume: self.sys_vol 
+            for session in &mut self.sessions {
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} (PID: {})", session.name, session.pid));                    
+                    let slider_response = ui.add(egui::Slider::new(&mut session.volume, 0.0..=100.0).text("%"));
+                    
+                    if slider_response.changed() {
+                        let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
+                            pid: session.pid, 
+                            volume: session.volume 
+                        });
+                    }
                 });
+                ui.add_space(10.0);
             }
-        });        });
+        });
     }
 }
