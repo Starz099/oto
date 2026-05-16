@@ -1,6 +1,7 @@
 use eframe::egui;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::app::{AppMessage, AudioProcess, UICommand};
+use tray_icon::TrayIcon;
 
 pub struct MixerApp {
     initialized: bool,
@@ -8,16 +9,18 @@ pub struct MixerApp {
     sessions: Vec<AudioProcess>,
     rx: UnboundedReceiver<AppMessage>,
     tx_cmd: UnboundedSender<UICommand>,
+    _tray_icon: TrayIcon,
 }
 
 impl MixerApp {
-    pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>) -> Self {
+    pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>, tray_icon: TrayIcon) -> Self {
         Self {
             initialized: false,
             is_visible: true,
             sessions: Vec::new(),
             rx,
             tx_cmd,
+            _tray_icon: tray_icon
         }
     }
 }

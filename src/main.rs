@@ -6,6 +6,15 @@ use tokio::sync::mpsc;
 use crate::app::{AppMessage, UICommand};
 use std::time::Duration;
 use eframe::egui;
+use tray_icon::{TrayIconBuilder, Icon, TrayIconEvent, MouseButton, MouseButtonState};
+
+fn load_tray_icon() -> Icon {
+    let icon_bytes = include_bytes!("../assets/icon.png");
+    let image = image::load_from_memory(icon_bytes).expect("Failed to parse icon image").into_rgba8();
+    let (width, height) = image.dimensions();
+    let rgba = image.into_raw();
+    Icon::from_rgba(rgba, width, height).expect("Failed to create tray icon from image data")
+}
 
 #[tokio::main]
 async fn main() {
@@ -27,6 +36,12 @@ async fn main() {
         native_options,
         Box::new(move |cc| {
             let ui_ctx = cc.egui_ctx.clone();
+
+            let tray_icon = TrayIconBuilder::new()
+                .with_tooltip("Raw Mixer")
+                .with_icon(load_tray_icon())
+                .build()
+                .unwrap();
 
             let tx_clone = tx.clone();
             let ctx_poller = ui_ctx.clone();
@@ -63,6 +78,24 @@ async fn main() {
                 }
             });
 
+            let tx_clone_tray: mpsc::UnboundedSender<AppMessage> = tx.clone();
+            let ctx_tray = ui_ctx.clone();
+            
+            std::thread::spawn(move || {
+                println!("Tray Icon Listener started...");
+                let tray_rx = TrayIconEvent::receiver();
+                
+                while let Ok(event) = tray_rx.recv() {
+                    if let TrayIconEvent::Click { button, button_state, .. } = event {
+                        if button == MouseButton::Left && button_state == MouseButtonState::Up {
+                            println!("Tray icon clicked. Toggling visibility...");
+                            let _ = tx_clone_tray.send(AppMessage::ToggleOverlay);
+                            ctx_tray.request_repaint();
+                        }
+                    }
+                }
+            });
+
             let tx_clone_3 = tx.clone();
             
             tokio::spawn(async move {
@@ -85,7 +118,7 @@ async fn main() {
                 }
             });
 
-            Ok(Box::new(ui::MixerApp::new(rx, tx_cmd)))
+            Ok(Box::new(ui::MixerApp::new(rx, tx_cmd, tray_icon)))
         }),
     );
 }
