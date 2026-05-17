@@ -7,6 +7,7 @@ use directories::ProjectDirs;
 pub struct AppConfig {
     pub hotkeys: Hotkeys,
     pub settings: Settings,
+    pub discord_access_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +55,7 @@ impl Default for AppConfig {
                 normal_step_percent: 2.0,
                 fast_step_percent: 10.0,
             },
+            discord_access_token: None,
         }
     }
 }
@@ -88,6 +90,18 @@ impl AppConfig {
             default_config
         } else {
             Self::default()
+        }
+    }
+
+    pub fn save(&self) {
+        if let Some(path) = Self::get_config_path() {
+            if let Ok(json_str) = serde_json::to_string_pretty(self) {
+                if let Err(e) = fs::write(&path, json_str) {
+                    eprintln!("Failed to save config to {:?}: {}", path, e);
+                } else {
+                    println!("Settings successfully saved to {:?}", path);
+                }
+            }
         }
     }
 }

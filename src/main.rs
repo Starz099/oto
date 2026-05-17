@@ -2,6 +2,7 @@ mod app;
 mod ui;
 mod audio;
 mod config;
+mod discord;
 
 use tokio::sync::mpsc;
 use crate::app::{AppMessage, UICommand};
@@ -19,10 +20,24 @@ fn load_tray_icon() -> Icon {
 
 #[tokio::main]
 async fn main() {
+    let mut app_config = config::AppConfig::load_or_create();
+    
+    if let Some(_token) = &app_config.discord_access_token {
+        println!("Found saved Discord token. Skipping auth popup.");
+    } else {
+        println!("No token found in config. Starting Discord auth flow...");
+        match discord::get_access_token().await {
+            Ok(new_token) => {
+                println!("Successfully retrieved new Discord token.");
+                app_config.discord_access_token = Some(new_token);
+                app_config.save(); 
+            }
+            Err(e) => println!("OAUTH FAILED: {}", e),
+        }
+    }
     let (tx, rx) = mpsc::unbounded_channel::<AppMessage>();
     let (tx_cmd, mut rx_cmd) = mpsc::unbounded_channel::<UICommand>();
     
-    let app_config = config::AppConfig::load_or_create();
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
