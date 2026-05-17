@@ -1,9 +1,16 @@
-use std::error::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use serde_json::json;
 use std::time::SystemTime;
+use serde::Deserialize;
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct VcUser {
+    pub id: String,
+    pub username: String,
+    pub volume: u32,
+    pub mute: bool,
+}
 // Discord IPC Opcodes
 const OP_HANDSHAKE: u32 = 0;
 const OP_FRAME: u32 = 1;
@@ -12,7 +19,7 @@ const DISCORD_CLIENT_ID: &str = "1505298148887630006";
 const LOCAL_API_URL: &str = "https://raw-mixer-api-inlu.vercel.app/api/auth";
 
 /// Helper function to pack JSON into Discord's strict binary format
-async fn send_ipc_frame(pipe: &mut NamedPipeClient, opcode: u32, payload: &str) -> Result<(), Box<dyn Error>> {
+async fn send_ipc_frame(pipe: &mut NamedPipeClient, opcode: u32, payload: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let payload_bytes = payload.as_bytes();
     let length = payload_bytes.len() as u32;
 
@@ -28,7 +35,7 @@ async fn send_ipc_frame(pipe: &mut NamedPipeClient, opcode: u32, payload: &str) 
 }
 
 /// Helper function to read Discord's binary response and unpack it to JSON
-async fn read_ipc_frame(pipe: &mut NamedPipeClient) -> Result<(u32, String), Box<dyn Error>> {
+async fn read_ipc_frame(pipe: &mut NamedPipeClient) -> Result<(u32, String), Box<dyn std::error::Error + Send + Sync>> {
     // Read the Opcode (4 bytes)
     let opcode = pipe.read_u32_le().await?;    
     // Read the Length of the incoming JSON (4 bytes)
@@ -43,11 +50,8 @@ async fn read_ipc_frame(pipe: &mut NamedPipeClient) -> Result<(u32, String), Box
     Ok((opcode, payload))
 }
 
-
-
-
 /// Connects to Discord's Named Pipe and performs the initial Handshake
-async fn connect_to_discord() -> Result<NamedPipeClient, Box<dyn Error>> {
+pub async fn connect_to_discord() -> Result<NamedPipeClient, Box<dyn std::error::Error + Send + Sync>> {
     println!("Looking for Discord IPC socket...");
     
     // Try to open the Named Pipe
@@ -83,7 +87,7 @@ async fn connect_to_discord() -> Result<NamedPipeClient, Box<dyn Error>> {
 
 
 /// Main entry point: Connects, asks for permission, and gets the token from Vercel/Express
-pub async fn get_access_token() -> Result<String, Box<dyn Error>> {
+pub async fn get_access_token() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // Open the socket and perform the handshake
     let mut pipe = connect_to_discord().await?;
 
@@ -145,4 +149,112 @@ pub async fn get_access_token() -> Result<String, Box<dyn Error>> {
     println!("Success! Locked in Access Token: {}", access_token);
     
     Ok(access_token)
+}
+
+
+/// Authenticates an open IPC socket using your saved token and returns your local User ID
+pub async fn authenticate_socket(
+    pipe: &mut tokio::net::windows::named_pipe::NamedPipeClient, 
+    token: &str
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let nonce = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_millis().to_string();
+    
+    let auth_payload = serde_json::json!({
+        "cmd": "AUTHENTICATE",
+        "args": {
+            "access_token": token
+        },
+        "nonce": nonce
+    });
+
+    send_ipc_frame(pipe, OP_FRAME, &auth_payload.to_string()).await?;
+    
+    let (_, response) = read_ipc_frame(pipe).await?;
+    let res_json: serde_json::Value = serde_json::from_str(&response)?;
+    
+    if res_json["evt"] == "ERROR" {
+        return Err(format!("Socket Auth failed: {}", response).into());
+    }
+    
+    // Extract your personal User ID from the auth response
+    let current_user_id = res_json["data"]["user"]["id"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    Ok(current_user_id)
+}
+
+/// Fetches VC users using an ALREADY OPEN, persistent socket, filtering out the local user
+pub async fn get_current_vc_users_persistent(
+    pipe: &mut tokio::net::windows::named_pipe::NamedPipeClient,
+    local_user_id: &str // NEW PARAMETER
+) -> Result<Vec<VcUser>, Box<dyn std::error::Error + Send + Sync>> {
+    let nonce = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_millis().to_string();
+    let payload = serde_json::json!({
+        "cmd": "GET_SELECTED_VOICE_CHANNEL",
+        "nonce": nonce
+    });
+
+    send_ipc_frame(pipe, OP_FRAME, &payload.to_string()).await?;
+    
+    loop {
+        let (_, response) = read_ipc_frame(pipe).await?;
+        let res_json: serde_json::Value = serde_json::from_str(&response)?;
+
+        if res_json["cmd"] == "DISPATCH" { continue; }
+
+        if res_json["data"].is_null() {
+            return Ok(vec![]);
+        }
+
+        let mut users = Vec::new();
+        if let Some(voice_states) = res_json["data"]["voice_states"].as_array() {
+            for state in voice_states {
+                let id = state["user"]["id"].as_str().unwrap_or("").to_string();
+                
+                // NEW: Skip adding the user to the list if it is YOU
+                if id == local_user_id {
+                    continue;
+                }
+
+                let username = state["user"]["username"].as_str().unwrap_or("Unknown").to_string();
+                let volume = state["volume"].as_u64().unwrap_or(100) as u32;
+                let mute = state["mute"].as_bool().unwrap_or(false);
+                users.push(VcUser { id, username, volume, mute });
+            }
+        }
+        return Ok(users);
+    }
+}
+
+
+/// Updates user volume using an ALREADY OPEN, persistent socket
+pub async fn set_user_voice_settings_persistent(
+    pipe: &mut tokio::net::windows::named_pipe::NamedPipeClient, 
+    user_id: &str, 
+    volume: u32, 
+    mute: bool
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let nonce = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_millis().to_string();
+    let payload = serde_json::json!({
+        "cmd": "SET_USER_VOICE_SETTINGS",
+        "args": {
+            "user_id": user_id,
+            "volume": volume,
+            "mute": mute
+        },
+        "nonce": nonce
+    });
+
+    send_ipc_frame(pipe, OP_FRAME, &payload.to_string()).await?;
+    
+    loop {
+        let (_, response) = read_ipc_frame(pipe).await?;
+        let res_json: serde_json::Value = serde_json::from_str(&response)?;
+        if res_json["cmd"] == "DISPATCH" { continue; }
+        break;
+    }
+
+    Ok(())
 }
