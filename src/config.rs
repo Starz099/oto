@@ -40,8 +40,8 @@ impl Default for AppConfig {
         Self {
             hotkeys: Hotkeys {
                 toggle_overlay: "BackQuote".to_string(),
-                nav_up: "J".to_string(),
-                nav_down: "K".to_string(),
+                nav_up: "K".to_string(),
+                nav_down: "J".to_string(),
                 vol_decrease: "H".to_string(),
                 vol_increase: "L".to_string(),
                 vol_decrease_fast: "Shift+H".to_string(),
@@ -53,7 +53,7 @@ impl Default for AppConfig {
                 accordion_open: "Enter".to_string(),
                 accordion_close: "Escape".to_string(),
                 ptt_mode_toggle: "T".to_string(),
-                ptt_mic_hold: "LeftControl".to_string(),
+                ptt_mic_hold: "V".to_string(),
             },
             settings: Settings {
                 normal_step_percent: 2.0,

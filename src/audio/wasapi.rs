@@ -130,19 +130,6 @@ fn get_process_name(pid: u32) -> Option<String> {
     }
 }
 
-/// Toggles the mute state of the Default Windows Microphone
-pub fn set_default_mic_mute(mute: bool) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    unsafe {
-        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        // eCapture specifies we want the Microphone, not the Speakers
-        let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)?;
-        let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
-        
-        endpoint_volume.SetMute(mute, std::ptr::null())?;
-    }
-    Ok(())
-}
-
 
 pub struct PersistentMic {
     endpoint_volume: IAudioEndpointVolume,
