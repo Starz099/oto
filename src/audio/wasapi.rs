@@ -2,7 +2,7 @@ use windows::core::{Interface, Result, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
-    eMultimedia, eRender, IAudioSessionControl2,
+    eMultimedia, eRender, IAudioSessionControl2, eCapture, eConsole,
     IAudioSessionManager2, ISimpleAudioVolume, IMMDeviceEnumerator, MMDeviceEnumerator,
 };
 use windows::Win32::System::Com::{
@@ -128,4 +128,17 @@ fn get_process_name(pid: u32) -> Option<String> {
         let _ = CloseHandle(handle);
         None
     }
+}
+
+/// Toggles the mute state of the Default Windows Microphone
+pub fn set_default_mic_mute(mute: bool) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+        // eCapture specifies we want the Microphone, not the Speakers
+        let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)?;
+        let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+        
+        endpoint_volume.SetMute(mute, std::ptr::null())?;
+    }
+    Ok(())
 }

@@ -10,7 +10,9 @@ use crate::app::{AppMessage, UICommand};
 use std::time::Duration;
 use eframe::egui;
 use tray_icon::{TrayIconBuilder, Icon, TrayIconEvent, MouseButton, MouseButtonState};
-
+use tray_icon::menu::{Menu, MenuItem, MenuEvent};
+use std::sync::atomic::{AtomicBool};
+use std::sync::Arc;
 fn load_tray_icon() -> Icon {
     let icon_bytes = include_bytes!("../assets/icon.png");
     let image = image::load_from_memory(icon_bytes).expect("Failed to parse icon image").into_rgba8();
@@ -22,7 +24,8 @@ fn load_tray_icon() -> Icon {
 #[tokio::main]
 async fn main() {
     let mut app_config = config::AppConfig::load_or_create();
-    
+    let ptt_enabled_state = Arc::new(AtomicBool::new(false));
+
     if let Some(_token) = &app_config.discord_access_token {
         println!("Found saved Discord token. Skipping auth popup.");
     } else {
@@ -56,11 +59,27 @@ async fn main() {
         Box::new(move |cc| {
             let ui_ctx = cc.egui_ctx.clone();
 
+            let tray_menu = Menu::new();
+            let quit_item = MenuItem::new("Quit", true, None);
+            let _ = tray_menu.append(&quit_item);
+            let quit_id = quit_item.id().clone();
+
             let tray_icon = TrayIconBuilder::new()
                 .with_tooltip("Raw Mixer")
                 .with_icon(load_tray_icon())
+                .with_menu(Box::new(tray_menu)) 
                 .build()
                 .unwrap();
+
+            std::thread::spawn(move || {
+                let menu_rx = MenuEvent::receiver();
+                while let Ok(event) = menu_rx.recv() {
+                    if event.id == quit_id {
+                        println!("Quit selected from tray. Shutting down...");
+                        std::process::exit(0);
+                    }
+                }
+            });
 
             // WASAPI Background Poller
             let tx_poller = tx.clone();
@@ -112,15 +131,36 @@ async fn main() {
             }
 
             // Hotkey Listener
+            let tx_hotkey_cmd = tx_cmd.clone();
             let tx_hotkey = tx.clone();
             let ctx_hotkey = ui_ctx.clone();
+            let ptt_state_for_rdev = ptt_enabled_state.clone();
+
             std::thread::spawn(move || {
+                let mut is_ptt_held = false; 
+
                 let callback = move |event: rdev::Event| {
-                    if let rdev::EventType::KeyPress(key) = event.event_type {
-                        if key == rdev::Key::BackQuote {
-                            let _ = tx_hotkey.send(AppMessage::ToggleOverlay);
-                            ctx_hotkey.request_repaint();
+                    match event.event_type {
+                        rdev::EventType::KeyPress(key) => {
+                            if key == rdev::Key::BackQuote {
+                                let _ = tx_hotkey.send(AppMessage::ToggleOverlay);
+                                ctx_hotkey.request_repaint();
+                            }
+                            
+                            if key == rdev::Key::Alt && ptt_state_for_rdev.load(std::sync::atomic::Ordering::Relaxed) {
+                                if !is_ptt_held {
+                                    is_ptt_held = true;
+                                    let _ = tx_hotkey_cmd.send(UICommand::SetGlobalMicMute { muted: false }); 
+                                }
+                            }
                         }
+                        rdev::EventType::KeyRelease(key) => {
+                            if key == rdev::Key::Alt && ptt_state_for_rdev.load(std::sync::atomic::Ordering::Relaxed) {
+                                is_ptt_held = false;
+                                let _ = tx_hotkey_cmd.send(UICommand::SetGlobalMicMute { muted: true }); 
+                            }
+                        }
+                        _ => {}
                     }
                 };
                 let _ = rdev::listen(callback);
@@ -158,11 +198,16 @@ async fn main() {
                         UICommand::SetDiscordUserVolume { user_id, volume, mute } => {
                             let _ = tx_discord_writer.send((user_id, volume, mute));
                         }
+                        UICommand::SetGlobalMicMute { muted } => {
+                            if let Err(e) = audio::wasapi::set_default_mic_mute(muted) {
+                                println!("Failed to toggle global mic: {}", e);
+                            }
+                        }
                     }
                 }
             });
 
-            Ok(Box::new(ui::MixerApp::new(rx, tx_cmd, tray_icon, app_config)))
+            Ok(Box::new(ui::MixerApp::new(rx, tx_cmd, tray_icon, app_config, ptt_enabled_state.clone())))
         }),
     );
 }
