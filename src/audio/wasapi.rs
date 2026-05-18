@@ -142,3 +142,46 @@ pub fn set_default_mic_mute(mute: bool) -> std::result::Result<(), Box<dyn std::
     }
     Ok(())
 }
+
+
+pub struct PersistentMic {
+    endpoint_volume: IAudioEndpointVolume,
+}
+
+// Safely tell Rust we can share this COM pointer across our Tokio threads
+unsafe impl Send for PersistentMic {}
+unsafe impl Sync for PersistentMic {}
+
+impl PersistentMic {
+    pub fn new() -> std::result::Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        unsafe {
+            // Initialize MTA (Multi-Threaded Apartment) for background engine
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)?;
+            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+            
+            Ok(Self { endpoint_volume })
+        }
+    }
+
+    pub fn set_mute(&self, mute: bool) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        unsafe {
+            self.endpoint_volume.SetMute(mute, std::ptr::null())?;
+        }
+        Ok(())
+    }
+
+    pub fn refresh(&mut self) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        unsafe {
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)?;
+            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+            
+            // Overwrite the old pointer with the fresh one
+            self.endpoint_volume = endpoint_volume;
+        }
+        Ok(())
+    }
+}

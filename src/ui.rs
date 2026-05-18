@@ -8,6 +8,20 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+#[derive(PartialEq)]
+pub enum AppScreen {
+    Mixer,
+    Settings,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum CustomKey {
+    Egui(egui::Key),
+    Ctrl,
+    Alt,
+    Shift,
+}
+
 pub struct MixerApp {
     initialized: bool,
     is_visible: bool,
@@ -24,9 +38,73 @@ pub struct MixerApp {
     pub is_discord_accordion_open: bool,
     pub selected_discord_user_index: usize,
     pub ptt_enabled: Arc<AtomicBool>,
+    is_ptt_held: bool,
+    current_screen: AppScreen,
 }
 
 impl MixerApp {
+    fn parse_custom_key(&self, key_str: &str) -> Option<CustomKey> {
+        match key_str.to_uppercase().as_str() {
+            "A" => Some(CustomKey::Egui(egui::Key::A)),
+            "B" => Some(CustomKey::Egui(egui::Key::B)),
+            "C" => Some(CustomKey::Egui(egui::Key::C)),
+            "D" => Some(CustomKey::Egui(egui::Key::D)),
+            "E" => Some(CustomKey::Egui(egui::Key::E)),
+            "F" => Some(CustomKey::Egui(egui::Key::F)),
+            "G" => Some(CustomKey::Egui(egui::Key::G)),
+            "H" => Some(CustomKey::Egui(egui::Key::H)),
+            "I" => Some(CustomKey::Egui(egui::Key::I)),
+            "J" => Some(CustomKey::Egui(egui::Key::J)),
+            "K" => Some(CustomKey::Egui(egui::Key::K)),
+            "L" => Some(CustomKey::Egui(egui::Key::L)),
+            "M" => Some(CustomKey::Egui(egui::Key::M)),
+            "N" => Some(CustomKey::Egui(egui::Key::N)),
+            "O" => Some(CustomKey::Egui(egui::Key::O)),
+            "P" => Some(CustomKey::Egui(egui::Key::P)),
+            "Q" => Some(CustomKey::Egui(egui::Key::Q)),
+            "R" => Some(CustomKey::Egui(egui::Key::R)),
+            "S" => Some(CustomKey::Egui(egui::Key::S)),
+            "T" => Some(CustomKey::Egui(egui::Key::T)),
+            "U" => Some(CustomKey::Egui(egui::Key::U)),
+            "V" => Some(CustomKey::Egui(egui::Key::V)),
+            "W" => Some(CustomKey::Egui(egui::Key::W)),
+            "X" => Some(CustomKey::Egui(egui::Key::X)),
+            "Y" => Some(CustomKey::Egui(egui::Key::Y)),
+            "Z" => Some(CustomKey::Egui(egui::Key::Z)),
+            "0" => Some(CustomKey::Egui(egui::Key::Num0)),
+            "1" => Some(CustomKey::Egui(egui::Key::Num1)),
+            "2" => Some(CustomKey::Egui(egui::Key::Num2)),
+            "3" => Some(CustomKey::Egui(egui::Key::Num3)),
+            "4" => Some(CustomKey::Egui(egui::Key::Num4)),
+            "5" => Some(CustomKey::Egui(egui::Key::Num5)),
+            "6" => Some(CustomKey::Egui(egui::Key::Num6)),
+            "7" => Some(CustomKey::Egui(egui::Key::Num7)),
+            "8" => Some(CustomKey::Egui(egui::Key::Num8)),
+            "9" => Some(CustomKey::Egui(egui::Key::Num9)),
+            "F1" => Some(CustomKey::Egui(egui::Key::F1)),
+            "F2" => Some(CustomKey::Egui(egui::Key::F2)),
+            "F3" => Some(CustomKey::Egui(egui::Key::F3)),
+            "F4" => Some(CustomKey::Egui(egui::Key::F4)),
+            "F5" => Some(CustomKey::Egui(egui::Key::F5)),
+            "F6" => Some(CustomKey::Egui(egui::Key::F6)),
+            "F7" => Some(CustomKey::Egui(egui::Key::F7)),
+            "F8" => Some(CustomKey::Egui(egui::Key::F8)),
+            "F9" => Some(CustomKey::Egui(egui::Key::F9)),
+            "F10" => Some(CustomKey::Egui(egui::Key::F10)),
+            "F11" => Some(CustomKey::Egui(egui::Key::F11)),
+            "F12" => Some(CustomKey::Egui(egui::Key::F12)),
+            "BACKQUOTE" | "`" | "~" => Some(CustomKey::Egui(egui::Key::Backtick)),
+            "CONTROLLEFT" | "CTRL" | "LEFTCONTROL" | "CONTROLRIGHT" | "RIGHTCONTROL" => Some(CustomKey::Ctrl),
+            "ALT" | "ALTLEFT" | "ALTRIGHT" => Some(CustomKey::Alt),
+            "SHIFTLEFT" | "LEFTSHIFT" | "SHIFTRIGHT" | "RIGHTSHIFT" => Some(CustomKey::Shift),
+            "SPACE" => Some(CustomKey::Egui(egui::Key::Space)),
+            "TAB" => Some(CustomKey::Egui(egui::Key::Tab)),
+            "ENTER" => Some(CustomKey::Egui(egui::Key::Enter)),
+            "ESCAPE" => Some(CustomKey::Egui(egui::Key::Escape)),
+            _ => None,
+        }
+    }
+
     pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>, tray_icon: TrayIcon, config: AppConfig, ptt_enabled: Arc<AtomicBool>) -> Self {
         Self {
             initialized: false,
@@ -44,6 +122,8 @@ impl MixerApp {
             is_discord_accordion_open: false,
             selected_discord_user_index: 0,
             ptt_enabled,
+            is_ptt_held: false,
+            current_screen: AppScreen::Mixer,
         }
     }
 }
@@ -116,6 +196,9 @@ impl eframe::App for MixerApp {
         let mut shift_pressed = false;
         let mut current_time = 0.0;
 
+        let ptt_mode_egui_key = self.parse_custom_key(&self.config.hotkeys.ptt_mode_toggle);
+        let ptt_hold_egui_key = self.parse_custom_key(&self.config.hotkeys.ptt_mic_hold);
+
         ctx.input(|i| {
             current_time = i.time;
             shift_pressed = i.modifiers.shift;
@@ -128,6 +211,46 @@ impl eframe::App for MixerApp {
                 if let egui::Event::Text(text) = event {
                     if text.contains('`') || text.contains('~') {
                         hide_requested = true;
+                    }
+                }
+            }
+
+            // Global PTT Hotkeys (only when focused)
+            if let Some(custom_key) = ptt_mode_egui_key {
+                let pressed = match custom_key {
+                    CustomKey::Egui(k) => i.key_pressed(k),
+                    _ => false, // Toggling with modifiers is tricky in egui without more state
+                };
+                if pressed {
+                    let current_state = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
+                    let new_state = !current_state;
+                    self.ptt_enabled.store(new_state, std::sync::atomic::Ordering::Relaxed);
+                    println!("[UI-Hotkey] PTT Mode Toggled: {}", if new_state { "ENABLED" } else { "DISABLED" });
+                    let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: new_state });
+                }
+            }
+
+            if let Some(custom_key) = ptt_hold_egui_key {
+                if self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+                    let is_down = match custom_key {
+                        CustomKey::Egui(k) => i.key_down(k),
+                        CustomKey::Ctrl => i.modifiers.ctrl,
+                        CustomKey::Alt => i.modifiers.alt,
+                        CustomKey::Shift => i.modifiers.shift,
+                    };
+
+                    if is_down {
+                        if !self.is_ptt_held {
+                            self.is_ptt_held = true;
+                            println!("[UI-Hotkey] PTT Key Pressed - Unmuting Mic");
+                            let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: false });
+                        }
+                    } else {
+                        if self.is_ptt_held {
+                            self.is_ptt_held = false;
+                            println!("[UI-Hotkey] PTT Key Released - Muting Mic");
+                            let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: true });
+                        }
                     }
                 }
             }
@@ -316,125 +439,166 @@ impl eframe::App for MixerApp {
 
             ui.heading(egui::RichText::new("Raw Mixer")
                 .color(egui::Color32::from_rgb(250, 250, 250)));
-                
-            ui.add_space(8.0);
-            ui.add(egui::Separator::default().horizontal());
 
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let mut ptt = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
-                
-                if ui.checkbox(&mut ptt, egui::RichText::new("🎙 Global PTT (Hold Ctrl)").color(egui::Color32::from_rgb(200, 200, 200))).changed() {
-                    self.ptt_enabled.store(ptt, std::sync::atomic::Ordering::Relaxed);
-                    
-                    if ptt {
-                        let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: true });
-                    }
-                }
+            ui.button("Switch Screen")
+            .clicked().then(|| {
+                self.current_screen = match self.current_screen {
+                    AppScreen::Mixer => AppScreen::Settings,
+                    AppScreen::Settings => AppScreen::Mixer,
+                };
             });
-                                    
-            ui.add_space(16.0);
 
-            egui::ScrollArea::vertical()
-                .auto_shrink([false; 2])
-                .show(ui, |ui| {
-                    for (index, session) in self.sessions.iter_mut().enumerate() {
-                        let is_discord = session.name.to_lowercase().contains("discord");
-                        let is_selected = index == self.selected_index && !self.is_discord_accordion_open;
+            match self.current_screen {
+                AppScreen::Mixer => {
+                    ui.add_space(8.0);
+                    ui.add(egui::Separator::default().horizontal());
+
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        let mut ptt = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
                         
-                        let background_color = if is_selected {
-                            egui::Color32::from_rgb(45, 45, 45) 
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
+                        if ui.checkbox(&mut ptt, egui::RichText::new("🎙 Global PTT (Hold Ctrl)").color(egui::Color32::from_rgb(200, 200, 200))).changed() {
+                            println!("[UI] PTT Mode Checkbox Changed: {}", if ptt { "ENABLED" } else { "DISABLED" });
+                            self.ptt_enabled.store(ptt, std::sync::atomic::Ordering::Relaxed);
+                            
+                            // Sync mic state immediately on UI toggle
+                            // If PTT enabled, mute the mic (wait for hold)
+                            // If PTT disabled, unmute the mic
+                            let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: ptt });
+                        }
+                    });
+                                            
+                    ui.add_space(16.0);
 
-                        let text_color = if is_selected || (is_discord && self.is_discord_accordion_open && index == self.selected_index) {
-                            egui::Color32::from_rgb(255, 255, 255)
-                        } else {
-                            egui::Color32::from_rgb(140, 140, 140)
-                        };
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
+                            for (index, session) in self.sessions.iter_mut().enumerate() {
+                                let is_discord = session.name.to_lowercase().contains("discord");
+                                let is_selected = index == self.selected_index && !self.is_discord_accordion_open;
+                                
+                                let background_color = if is_selected {
+                                    egui::Color32::from_rgb(45, 45, 45) 
+                                } else {
+                                    egui::Color32::TRANSPARENT
+                                };
 
-                        let row_response = egui::Frame::new()
-                            .fill(background_color)
-                            .corner_radius(2.0)
-                            .inner_margin(8.0)
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(&session.name).color(text_color));
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if is_discord {
-                                            let icon = if self.is_discord_accordion_open { "🔽" } else { "◀" };
-                                            ui.label(egui::RichText::new(icon).color(text_color));
-                                        }
-                                        
-                                        let slider_response = ui.add(egui::Slider::new(&mut session.volume, 0.0..=100.0).show_value(false));
-                                        if slider_response.changed() {
-                                            let target_name = session.name.clone();
-                                            for raw_session in &mut self.raw_sessions {
-                                                if raw_session.name == target_name {
-                                                    raw_session.volume = session.volume;
-                                                    self.saved_volumes.remove(&raw_session.pid);
-                                                    let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
-                                                        pid: raw_session.pid, 
-                                                        volume: session.volume 
-                                                    });
+                                let text_color = if is_selected || (is_discord && self.is_discord_accordion_open && index == self.selected_index) {
+                                    egui::Color32::from_rgb(255, 255, 255)
+                                } else {
+                                    egui::Color32::from_rgb(140, 140, 140)
+                                };
+
+                                let row_response = egui::Frame::new()
+                                    .fill(background_color)
+                                    .corner_radius(2.0)
+                                    .inner_margin(8.0)
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new(&session.name).color(text_color));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                if is_discord {
+                                                    let icon = if self.is_discord_accordion_open { "🔽" } else { "◀" };
+                                                    ui.label(egui::RichText::new(icon).color(text_color));
+                                                }
+                                                
+                                                let slider_response = ui.add(egui::Slider::new(&mut session.volume, 0.0..=100.0).show_value(false));
+                                                if slider_response.changed() {
+                                                    let target_name = session.name.clone();
+                                                    for raw_session in &mut self.raw_sessions {
+                                                        if raw_session.name == target_name {
+                                                            raw_session.volume = session.volume;
+                                                            self.saved_volumes.remove(&raw_session.pid);
+                                                            let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
+                                                                pid: raw_session.pid, 
+                                                                volume: session.volume 
+                                                            });
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    }).response;
+
+                                if is_selected {
+                                    row_response.scroll_to_me(Some(egui::Align::Center));
+                                }
+                                
+                                if is_discord && self.is_discord_accordion_open && index == self.selected_index {
+                                    ui.indent("discord_accordion", |ui| {
+                                        if self.discord_users.is_empty() {
+                                            ui.add_space(4.0);
+                                            ui.label(egui::RichText::new("Not in a Voice Channel").color(egui::Color32::from_rgb(100, 100, 100)));
+                                        } else {
+                                            for (i, user) in self.discord_users.iter_mut().enumerate() {
+                                                let is_user_selected = i == self.selected_discord_user_index;
+                                                let user_bg = if is_user_selected { egui::Color32::from_rgb(55, 55, 55) } else { egui::Color32::TRANSPARENT };
+                                                let user_text = if is_user_selected { egui::Color32::from_rgb(255, 255, 255) } else { egui::Color32::from_rgb(180, 180, 180) };
+                                                
+                                                ui.add_space(2.0);
+                                                let user_row_response = egui::Frame::new()
+                                                    .fill(user_bg)
+                                                    .corner_radius(2.0)
+                                                    .inner_margin(6.0)
+                                                    .show(ui, |ui| {
+                                                        ui.horizontal(|ui| {
+                                                            let mute_icon = if user.mute { "🔇" } else { "🔊" };
+                                                            ui.label(egui::RichText::new(format!("{}  {}", mute_icon, user.username)).color(user_text));
+                                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                                let mut vol_f32 = user.volume as f32;
+                                                                let slider_response = ui.add(egui::Slider::new(&mut vol_f32, 0.0..=200.0).show_value(false));
+                                                                user.volume = vol_f32 as u32;
+                                                                
+                                                                if slider_response.changed() {
+                                                                    let _ = self.tx_cmd.send(UICommand::SetDiscordUserVolume {
+                                                                        user_id: user.id.clone(),
+                                                                        volume: user.volume,
+                                                                        mute: user.mute,
+                                                                    });
+                                                                }
+                                                            });
+                                                        });
+                                                    }).response;
+
+                                                if is_user_selected {
+                                                    user_row_response.scroll_to_me(Some(egui::Align::Center));
                                                 }
                                             }
                                         }
                                     });
-                                });
-                            }).response;
-
-                        if is_selected {
-                            row_response.scroll_to_me(Some(egui::Align::Center));
-                        }
-                        
-                        if is_discord && self.is_discord_accordion_open && index == self.selected_index {
-                            ui.indent("discord_accordion", |ui| {
-                                if self.discord_users.is_empty() {
-                                    ui.add_space(4.0);
-                                    ui.label(egui::RichText::new("Not in a Voice Channel").color(egui::Color32::from_rgb(100, 100, 100)));
-                                } else {
-                                    for (i, user) in self.discord_users.iter_mut().enumerate() {
-                                        let is_user_selected = i == self.selected_discord_user_index;
-                                        let user_bg = if is_user_selected { egui::Color32::from_rgb(55, 55, 55) } else { egui::Color32::TRANSPARENT };
-                                        let user_text = if is_user_selected { egui::Color32::from_rgb(255, 255, 255) } else { egui::Color32::from_rgb(180, 180, 180) };
-                                        
-                                        ui.add_space(2.0);
-                                        let user_row_response = egui::Frame::new()
-                                            .fill(user_bg)
-                                            .corner_radius(2.0)
-                                            .inner_margin(6.0)
-                                            .show(ui, |ui| {
-                                                ui.horizontal(|ui| {
-                                                    let mute_icon = if user.mute { "🔇" } else { "🔊" };
-                                                    ui.label(egui::RichText::new(format!("{}  {}", mute_icon, user.username)).color(user_text));
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        let mut vol_f32 = user.volume as f32;
-                                                        let slider_response = ui.add(egui::Slider::new(&mut vol_f32, 0.0..=200.0).show_value(false));
-                                                        user.volume = vol_f32 as u32;
-                                                        
-                                                        if slider_response.changed() {
-                                                            let _ = self.tx_cmd.send(UICommand::SetDiscordUserVolume {
-                                                                user_id: user.id.clone(),
-                                                                volume: user.volume,
-                                                                mute: user.mute,
-                                                            });
-                                                        }
-                                                    });
-                                                });
-                                            }).response;
-
-                                        if is_user_selected {
-                                            user_row_response.scroll_to_me(Some(egui::Align::Center));
-                                        }
-                                    }
                                 }
-                            });
+                                ui.add_space(6.0);
+                            }
+                        });
+
+                }
+                AppScreen::Settings => {
+                    ui.add_space(16.0);
+                    ui.heading(egui::RichText::new("Keybindings").color(egui::Color32::from_rgb(200, 200, 200)));
+                    ui.add_space(8.0);
+                    
+                    egui::Frame::new().fill(egui::Color32::from_rgb(25, 25, 25)).inner_margin(12.0).corner_radius(4.0).show(ui, |ui| {
+                        egui::Grid::new("hotkeys_grid").num_columns(2).spacing([40.0, 10.0]).show(ui, |ui| {
+                            ui.label("Toggle Overlay:");
+                            ui.text_edit_singleline(&mut self.config.hotkeys.toggle_overlay);
+                            ui.end_row();
+
+                            ui.label("Toggle PTT Mode:");
+                            ui.text_edit_singleline(&mut self.config.hotkeys.ptt_mode_toggle);
+                            ui.end_row();
+
+                            ui.label("PTT Hold Key:");
+                            ui.text_edit_singleline(&mut self.config.hotkeys.ptt_mic_hold);
+                            ui.end_row();
+                        });
+
+                        ui.add_space(16.0);
+                        if ui.button("Save Settings").clicked() {
+                            self.config.save();
                         }
-                        ui.add_space(6.0);
-                    }
-                });
+                    });
+                }
+            }
         });
     }
 }

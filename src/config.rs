@@ -25,6 +25,8 @@ pub struct Hotkeys {
     // pub pin: String,
     pub accordion_open: String,
     pub accordion_close: String,
+    pub ptt_mode_toggle: String,
+    pub ptt_mic_hold: String
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +52,8 @@ impl Default for AppConfig {
                 // pub pin: String,
                 accordion_open: "Enter".to_string(),
                 accordion_close: "Escape".to_string(),
+                ptt_mode_toggle: "T".to_string(),
+                ptt_mic_hold: "LeftControl".to_string(),
             },
             settings: Settings {
                 normal_step_percent: 2.0,
