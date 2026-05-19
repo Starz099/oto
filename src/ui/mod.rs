@@ -158,8 +158,7 @@ impl eframe::App for MixerApp {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 AppMessage::UpdateSessions(new_sessions) => {
-                    self.raw_sessions = new_sessions.clone();
-                    
+                    let mut normalized_sessions = Vec::new();
                     let mut unique_sessions = Vec::new();
                     let mut seen_names = HashSet::new();
                     
@@ -176,12 +175,17 @@ impl eframe::App for MixerApp {
                             session.name.clone()
                         };
                         session.name = cleaned_name;
+                        normalized_sessions.push(session.clone());
 
                         if !seen_names.contains(&session.name) {
                             seen_names.insert(session.name.clone());
                             unique_sessions.push(session);
                         }
                     }
+
+                    // Keep the raw cache normalized too so later volume updates match the
+                    // same labels the UI shows.
+                    self.raw_sessions = normalized_sessions;
 
                     let selected_name = self.sessions.get(self.selected_index).map(|s| s.name.clone());
                     self.sessions = unique_sessions;
