@@ -1,86 +1,81 @@
 use eframe::egui;
 use crate::ui::MixerApp;
+use crate::ui::theme;
 
 impl MixerApp {
     pub(crate) fn show_settings_ui(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(16.0);
-        ui.heading(egui::RichText::new("Settings").color(egui::Color32::from_rgb(200, 200, 200)));
+        let theme = theme::Theme::pastel_pink();
         ui.add_space(8.0);
+        
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .max_height(ui.available_height() - 80.0)
+            .show(ui, |ui| {
+                ui.label(egui::RichText::new("Keybindings").color(theme.primary_pink).strong());
+                ui.add_space(theme.item_spacing / 2.0);
 
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading(egui::RichText::new("Keybindings").size(18.0).color(egui::Color32::from_rgb(180, 180, 180)));
-            ui.add_space(8.0);
+                self.keybind_row_styled(ui, "Toggle Overlay", "toggle_overlay", &theme);
+                self.keybind_row_styled(ui, "PTT Mode Toggle", "ptt_mode_toggle", &theme);
+                self.keybind_row_styled(ui, "PTT Hold Key", "ptt_mic_hold", &theme);
+                
+                ui.add_space(12.0);
+                ui.label(egui::RichText::new("Navigation").color(theme.text_accent).small());
+                ui.add_space(4.0);
+                
+                self.keybind_row_styled(ui, "Navigate Up", "nav_up", &theme);
+                self.keybind_row_styled(ui, "Navigate Down", "nav_down", &theme);
+                self.keybind_row_styled(ui, "Jump to Top", "jump_top", &theme);
+                self.keybind_row_styled(ui, "Jump to Bottom", "jump_bottom", &theme);
+                self.keybind_row_styled(ui, "Open Accordion", "accordion_open", &theme);
+                self.keybind_row_styled(ui, "Close Accordion", "accordion_close", &theme);
+                
+                ui.add_space(12.0);
+                ui.label(egui::RichText::new("Volume Control").color(theme.text_accent).small());
+                ui.add_space(4.0);
+                
+                self.keybind_row_styled(ui, "Volume Increase", "vol_increase", &theme);
+                self.keybind_row_styled(ui, "Volume Decrease", "vol_decrease", &theme);
+                self.keybind_row_styled(ui, "Fast Step Modifier", "fast_modifier", &theme);
+                self.keybind_row_styled(ui, "Mute", "mute", &theme);
 
-            egui::Frame::new()
-                .fill(egui::Color32::from_rgb(25, 25, 25))
-                .inner_margin(12.0)
-                .corner_radius(4.0)
-                .show(ui, |ui| {
-                    egui::Grid::new("hotkeys_grid")
-                        .num_columns(2)
-                        .spacing([40.0, 12.0])
-                        .show(ui, |ui| {
-                            self.keybind_row(ui, "Toggle Overlay", "toggle_overlay");
-                            self.keybind_row(ui, "PTT Mode Toggle", "ptt_mode_toggle");
-                            self.keybind_row(ui, "PTT Hold Key", "ptt_mic_hold");
-                            ui.end_row();
-                            ui.label(egui::RichText::new("Navigation").strong());
-                            ui.end_row();
-                            self.keybind_row(ui, "Navigate Up", "nav_up");
-                            self.keybind_row(ui, "Navigate Down", "nav_down");
-                            self.keybind_row(ui, "Jump to Top", "jump_top");
-                            self.keybind_row(ui, "Jump to Bottom", "jump_bottom");
-                            self.keybind_row(ui, "Open Accordion", "accordion_open");
-                            self.keybind_row(ui, "Close Accordion", "accordion_close");
-                            ui.end_row();
-                            ui.label(egui::RichText::new("Volume").strong());
-                            ui.end_row();
-                            self.keybind_row(ui, "Volume Increase", "vol_increase");
-                            self.keybind_row(ui, "Volume Decrease", "vol_decrease");
-                            self.keybind_row(ui, "Fast Step Modifier", "fast_modifier");
-                            self.keybind_row(ui, "Mute", "mute");
-                        });
-                });
+                ui.add_space(24.0);
+                ui.label(egui::RichText::new("General Settings").color(theme.primary_pink).strong());
+                ui.add_space(theme.item_spacing / 2.0);
 
-            ui.add_space(24.0);
-            ui.heading(egui::RichText::new("General").size(18.0).color(egui::Color32::from_rgb(180, 180, 180)));
-            ui.add_space(8.0);
+                Self::slider_row_styled(ui, "Normal Step (%)", &mut self.config.settings.normal_step_percent, 1.0..=20.0, &theme);
+                Self::slider_row_styled(ui, "Fast Step (%)", &mut self.config.settings.fast_step_percent, 5.0..=50.0, &theme);
 
-            egui::Frame::new()
-                .fill(egui::Color32::from_rgb(25, 25, 25))
-                .inner_margin(12.0)
-                .corner_radius(4.0)
-                .show(ui, |ui| {
-                    egui::Grid::new("settings_grid")
-                        .num_columns(2)
-                        .spacing([40.0, 12.0])
-                        .show(ui, |ui| {
-                            ui.label("Normal Step (%):");
-                            ui.add(egui::Slider::new(&mut self.config.settings.normal_step_percent, 1.0..=20.0));
-                            ui.end_row();
+                ui.add_space(16.0);
+            });
 
-                            ui.label("Fast Step (%):");
-                            ui.add(egui::Slider::new(&mut self.config.settings.fast_step_percent, 5.0..=50.0));
-                            ui.end_row();
-                        });
-                });
+        ui.add_space(12.0);
+        let button_label = if self.needs_restart {
+            "Apply and Restart App"
+        } else {
+            "Save Changes"
+        };
 
-            ui.add_space(24.0);
-            let button_label = if self.needs_restart {
-                "💾 Save and Restart"
-            } else {
-                "💾 Save All Settings"
-            };
+        let (button_fill, button_text_color, button_border) = if self.needs_restart {
+            (theme.primary_pink.gamma_multiply(0.22), theme.bg_dark, theme.primary_pink)
+        } else {
+            (theme.bg_selection, theme.text_main, theme.primary_pink.gamma_multiply(0.5))
+        };
 
-            if ui.button(egui::RichText::new(button_label).size(16.0)).clicked() {
-                self.config.save();
-                if self.needs_restart {
-                    self.restart_app();
-                }
+        let save_btn = ui.add_sized([ui.available_width(), 44.0], 
+            egui::Button::new(egui::RichText::new(button_label).strong().size(16.0).color(button_text_color))
+                .fill(button_fill)
+                .stroke(egui::Stroke::new(1.0, button_border))
+        );
+
+        if save_btn.clicked() {
+            self.config.save();
+            if self.needs_restart {
+                self.restart_app();
             }
-        });
+        }
+        ui.add_space(12.0);
 
-        // Key Grabber Logic
+        // Key Grabber Logic (unchanged functionality)
         if let Some(field_name) = self.recording_keybind.clone() {
             let mut captured_key = None;
             
@@ -121,7 +116,6 @@ impl MixerApp {
                     _ => {}
                 }
 
-                // Check if global listener keys were changed
                 if self.config.hotkeys.toggle_overlay != self.original_hotkeys.toggle_overlay ||
                    self.config.hotkeys.ptt_mode_toggle != self.original_hotkeys.ptt_mode_toggle ||
                    self.config.hotkeys.ptt_mic_hold != self.original_hotkeys.ptt_mic_hold {
@@ -140,37 +134,63 @@ impl MixerApp {
         }
     }
 
-    fn keybind_row(&mut self, ui: &mut egui::Ui, label: &str, field_name: &str) {
-        ui.label(label);
-        
-        let current_val = match field_name {
-            "toggle_overlay" => &self.config.hotkeys.toggle_overlay,
-            "ptt_mode_toggle" => &self.config.hotkeys.ptt_mode_toggle,
-            "ptt_mic_hold" => &self.config.hotkeys.ptt_mic_hold,
-            "nav_up" => &self.config.hotkeys.nav_up,
-            "nav_down" => &self.config.hotkeys.nav_down,
-            "vol_increase" => &self.config.hotkeys.vol_increase,
-            "vol_decrease" => &self.config.hotkeys.vol_decrease,
-            "fast_modifier" => &self.config.hotkeys.fast_modifier,
-            "jump_top" => &self.config.hotkeys.jump_top,
-            "jump_bottom" => &self.config.hotkeys.jump_bottom,
-            "accordion_open" => &self.config.hotkeys.accordion_open,
-            "accordion_close" => &self.config.hotkeys.accordion_close,
-            "mute" => &self.config.hotkeys.mute,
-            _ => "",
-        };
+    fn keybind_row_styled(&mut self, ui: &mut egui::Ui, label: &str, field_name: &str, theme: &theme::Theme) {
+        ui.add_space(2.0);
+        egui::Frame::new()
+            .fill(theme.bg_panel.gamma_multiply(0.2))
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .corner_radius(theme.corner_radius)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).color(theme.text_main));
+                    
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let current_val = match field_name {
+                            "toggle_overlay" => &self.config.hotkeys.toggle_overlay,
+                            "ptt_mode_toggle" => &self.config.hotkeys.ptt_mode_toggle,
+                            "ptt_mic_hold" => &self.config.hotkeys.ptt_mic_hold,
+                            "nav_up" => &self.config.hotkeys.nav_up,
+                            "nav_down" => &self.config.hotkeys.nav_down,
+                            "vol_increase" => &self.config.hotkeys.vol_increase,
+                            "vol_decrease" => &self.config.hotkeys.vol_decrease,
+                            "fast_modifier" => &self.config.hotkeys.fast_modifier,
+                            "jump_top" => &self.config.hotkeys.jump_top,
+                            "jump_bottom" => &self.config.hotkeys.jump_bottom,
+                            "accordion_open" => &self.config.hotkeys.accordion_open,
+                            "accordion_close" => &self.config.hotkeys.accordion_close,
+                            "mute" => &self.config.hotkeys.mute,
+                            _ => "",
+                        };
 
-        let is_recording = self.recording_keybind.as_deref() == Some(field_name);
-        let button_text = if is_recording {
-            "Press a key...".to_string()
-        } else {
-            current_val.to_string()
-        };
+                        let is_recording = self.recording_keybind.as_deref() == Some(field_name);
+                        let button_text = if is_recording { "..." } else { current_val };
 
-        if ui.button(egui::RichText::new(button_text).color(if is_recording { egui::Color32::LIGHT_BLUE } else { egui::Color32::WHITE })).clicked() {
-            self.recording_keybind = Some(field_name.to_string());
-        }
-        ui.end_row();
+                        let btn = ui.add(egui::Button::new(egui::RichText::new(button_text).monospace())
+                            .min_size(egui::vec2(100.0, 28.0))
+                            .fill(if is_recording { theme.primary_pink } else { theme.bg_selection }));
+                        
+                        if btn.clicked() {
+                            self.recording_keybind = Some(field_name.to_string());
+                        }
+                    });
+                });
+            });
+    }
+
+    fn slider_row_styled(ui: &mut egui::Ui, label: &str, value: &mut f32, range: std::ops::RangeInclusive<f32>, theme: &theme::Theme) {
+        ui.add_space(2.0);
+        egui::Frame::new()
+            .fill(theme.bg_panel.gamma_multiply(0.2))
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .corner_radius(theme.corner_radius)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).color(theme.text_main));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add(egui::Slider::new(value, range).show_value(true));
+                    });
+                });
+            });
     }
 
     fn custom_key_to_str(&self, key: crate::ui::CustomKey) -> String {

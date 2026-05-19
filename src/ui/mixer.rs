@@ -1,10 +1,12 @@
 use eframe::egui;
 use crate::ui::MixerApp;
 use crate::app::UICommand;
+use crate::ui::theme;
 
 impl MixerApp {
     pub(crate) fn show_mixer_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        let theme = theme::Theme::pastel_pink();
         
         let mut hide_requested = false;
         let mut nav_up = false;
@@ -16,8 +18,6 @@ impl MixerApp {
         let mut mute_pressed = false;
         let mut accordion_open = false;
         let mut accordion_close = false;
-
-        let mut current_time = 0.0;
 
         let ptt_mode_egui_key = self.parse_custom_key(&self.config.hotkeys.ptt_mode_toggle);
         let ptt_hold_egui_key = self.parse_custom_key(&self.config.hotkeys.ptt_mic_hold);
@@ -36,8 +36,6 @@ impl MixerApp {
         let mut fast_mod_active = false;
 
         ctx.input(|i| {
-            current_time = i.time;
-
             if i.key_pressed(egui::Key::Escape) {
                 hide_requested = true;
             }
@@ -81,14 +79,13 @@ impl MixerApp {
             // Global PTT Hotkeys (only when focused)
             if let Some(custom_key) = ptt_mode_egui_key {
                 let pressed = match custom_key {
-                    CustomKey::Egui(k) => i.key_pressed(k),
+                    crate::ui::CustomKey::Egui(k) => i.key_pressed(k),
                     _ => false, 
                 };
                 if pressed {
                     let current_state = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
                     let new_state = !current_state;
                     self.ptt_enabled.store(new_state, std::sync::atomic::Ordering::Relaxed);
-                    println!("[UI-Hotkey] PTT Mode Toggled: {}", if new_state { "ENABLED" } else { "DISABLED" });
                     let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: new_state });
                 }
             }
@@ -96,30 +93,26 @@ impl MixerApp {
             if let Some(custom_key) = ptt_hold_egui_key {
                 if self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed) {
                     let is_down = match custom_key {
-                        CustomKey::Egui(k) => i.key_down(k),
-                        CustomKey::Ctrl => i.modifiers.ctrl,
-                        CustomKey::Alt => i.modifiers.alt,
-                        CustomKey::Shift => i.modifiers.shift,
+                        crate::ui::CustomKey::Egui(k) => i.key_down(k),
+                        crate::ui::CustomKey::Ctrl => i.modifiers.ctrl,
+                        crate::ui::CustomKey::Alt => i.modifiers.alt,
+                        crate::ui::CustomKey::Shift => i.modifiers.shift,
                     };
 
                     if is_down {
                         if !self.is_ptt_held {
                             self.is_ptt_held = true;
-                            println!("[UI-Hotkey] PTT Key Pressed - Unmuting Mic");
                             let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: false });
                         }
                     } else {
                         if self.is_ptt_held {
                             self.is_ptt_held = false;
-                            println!("[UI-Hotkey] PTT Key Released - Muting Mic");
                             let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: true });
                         }
                     }
                 }
             }
         });
-
-        use crate::ui::CustomKey;
 
         let is_discord_selected = self.sessions.get(self.selected_index)
             .map_or(false, |s| s.name.to_lowercase().contains("discord"));
@@ -189,14 +182,8 @@ impl MixerApp {
                 }
             }
 
-            if jump_bottom {
-                self.selected_index = session_count - 1;
-            }
-
-            if jump_top {
-                // Special handling for double-tap 'gg' was here before, but now we just use a single key for Jump to Top
-                self.selected_index = 0;
-            }
+            if jump_bottom { self.selected_index = session_count - 1; }
+            if jump_top { self.selected_index = 0; }
 
             if vol_dec || vol_inc {
                 let step = if fast_mod_active { 
@@ -241,55 +228,59 @@ impl MixerApp {
             }
         }
 
-        ui.add_space(8.0);
-        ui.add(egui::Separator::default().horizontal());
-
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            let mut ptt = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
-            
-            if ui.checkbox(&mut ptt, egui::RichText::new("Global PTT").color(egui::Color32::from_rgb(200, 200, 200))).changed() {
-                println!("[UI] PTT Mode Checkbox Changed: {}", if ptt { "ENABLED" } else { "DISABLED" });
-                self.ptt_enabled.store(ptt, std::sync::atomic::Ordering::Relaxed);
-                let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: ptt });
-            }
-        });
-                                
-        ui.add_space(16.0);
-
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
+                ui.add_space(4.0);
                 for (index, session) in self.sessions.iter_mut().enumerate() {
                     let is_discord = session.name.to_lowercase().contains("discord");
                     let is_selected = index == self.selected_index && !self.is_discord_accordion_open;
                     
                     let background_color = if is_selected {
-                        egui::Color32::from_rgb(45, 45, 45) 
+                        theme.bg_selection
                     } else {
                         egui::Color32::TRANSPARENT
                     };
 
-                    let text_color = if is_selected || (is_discord && self.is_discord_accordion_open && index == self.selected_index) {
-                        egui::Color32::from_rgb(255, 255, 255)
+                    let text_color = if is_selected {
+                        theme.text_main
                     } else {
-                        egui::Color32::from_rgb(140, 140, 140)
+                        theme.text_dim
                     };
 
                     let row_response = egui::Frame::new()
                         .fill(background_color)
-                        .corner_radius(2.0)
-                        .inner_margin(8.0)
+                        .corner_radius(theme.corner_radius)
+                        .inner_margin(egui::Margin::symmetric(12, 8))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(&session.name).color(text_color));
+                                // Selected Indicator Bar
+                                if is_selected {
+                                    let (rect, _) = ui.allocate_at_least(egui::vec2(3.0, 16.0), egui::Sense::hover());
+                                    ui.painter().rect_filled(rect, 2.0, theme.primary_pink);
+                                    ui.add_space(8.0);
+                                } else {
+                                    ui.add_space(11.0);
+                                }
+
+                                ui.label(egui::RichText::new(&session.name).color(text_color).strong());
+                                
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if is_discord {
                                         let icon = if self.is_discord_accordion_open { "🔽" } else { "◀" };
-                                        ui.label(egui::RichText::new(icon).color(text_color));
+                                        ui.label(egui::RichText::new(icon).color(text_color).size(12.0));
+                                        ui.add_space(8.0);
                                     }
+
+                                    // Always visible numeric volume
+                                    ui.add_space(8.0);
+                                    ui.label(egui::RichText::new(format!("{:>3}%", session.volume as u32))
+                                        .color(if is_selected { theme.primary_pink } else { theme.text_dim })
+                                        .monospace());
                                     
-                                    let slider_response = ui.add(egui::Slider::new(&mut session.volume, 0.0..=100.0).show_value(false));
+                                    let slider_response = ui.add(egui::Slider::new(&mut session.volume, 0.0..=100.0)
+                                        .show_value(false));
+                                    
                                     if slider_response.changed() {
                                         let target_name = session.name.clone();
                                         for raw_session in &mut self.raw_sessions {
@@ -315,23 +306,37 @@ impl MixerApp {
                         ui.indent("discord_accordion", |ui| {
                             if self.discord_users.is_empty() {
                                 ui.add_space(4.0);
-                                ui.label(egui::RichText::new("Not in a Voice Channel").color(egui::Color32::from_rgb(100, 100, 100)));
+                                ui.label(egui::RichText::new("Not in a Voice Channel").color(theme.text_dim).small());
                             } else {
                                 for (i, user) in self.discord_users.iter_mut().enumerate() {
                                     let is_user_selected = i == self.selected_discord_user_index;
-                                    let user_bg = if is_user_selected { egui::Color32::from_rgb(55, 55, 55) } else { egui::Color32::TRANSPARENT };
-                                    let user_text = if is_user_selected { egui::Color32::from_rgb(255, 255, 255) } else { egui::Color32::from_rgb(180, 180, 180) };
+                                    let user_bg = if is_user_selected { theme.bg_selection.gamma_multiply(0.5) } else { egui::Color32::TRANSPARENT };
+                                    let user_text = if is_user_selected { theme.text_main } else { theme.text_dim };
                                     
                                     ui.add_space(2.0);
                                     let user_row_response = egui::Frame::new()
                                         .fill(user_bg)
-                                        .corner_radius(2.0)
-                                        .inner_margin(6.0)
+                                        .corner_radius(theme.corner_radius - 2.0)
+                                        .inner_margin(egui::Margin::symmetric(10, 6))
                                         .show(ui, |ui| {
                                             ui.horizontal(|ui| {
+                                                if is_user_selected {
+                                                    let (rect, _) = ui.allocate_at_least(egui::vec2(2.0, 12.0), egui::Sense::hover());
+                                                    ui.painter().rect_filled(rect, 1.0, theme.text_accent);
+                                                    ui.add_space(6.0);
+                                                } else {
+                                                    ui.add_space(8.0);
+                                                }
+
                                                 let mute_icon = if user.mute { "🔇" } else { "🔊" };
                                                 ui.label(egui::RichText::new(format!("{}  {}", mute_icon, user.username)).color(user_text));
+                                                
                                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    ui.add_space(8.0);
+                                                    ui.label(egui::RichText::new(format!("{:>3}%", user.volume))
+                                                        .color(if is_user_selected { theme.text_accent } else { theme.text_dim })
+                                                        .monospace());
+
                                                     let mut vol_f32 = user.volume as f32;
                                                     let slider_response = ui.add(egui::Slider::new(&mut vol_f32, 0.0..=200.0).show_value(false));
                                                     user.volume = vol_f32 as u32;
@@ -354,7 +359,7 @@ impl MixerApp {
                             }
                         });
                     }
-                    ui.add_space(6.0);
+                    ui.add_space(4.0);
                 }
             });
     }

@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 mod mixer;
 mod settings;
+mod theme;
 
 #[derive(PartialEq)]
 pub enum AppScreen {
@@ -162,7 +163,20 @@ impl eframe::App for MixerApp {
                     let mut unique_sessions = Vec::new();
                     let mut seen_names = HashSet::new();
                     
-                    for session in new_sessions {
+                    for mut session in new_sessions {
+                        // Clean up session name: chrome.exe -> Chrome
+                        let cleaned_name = if session.name.to_lowercase().ends_with(".exe") {
+                            let stem = &session.name[..session.name.len() - 4];
+                            let mut chars = stem.chars();
+                            match chars.next() {
+                                None => stem.to_string(),
+                                Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+                            }
+                        } else {
+                            session.name.clone()
+                        };
+                        session.name = cleaned_name;
+
                         if !seen_names.contains(&session.name) {
                             seen_names.insert(session.name.clone());
                             unique_sessions.push(session);
@@ -190,8 +204,8 @@ impl eframe::App for MixerApp {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                         if let Some(monitor_size) = ctx.input(|i| i.viewport().monitor_size) {
                             let center_pos = egui::pos2(
-                                (monitor_size.x - 450.0) / 2.0,
-                                (monitor_size.y - 350.0) / 2.0,
+                                (monitor_size.x - 550.0) / 2.0,
+                                (monitor_size.y - 500.0) / 2.0,
                             );
                             ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(center_pos));
                         }
@@ -204,52 +218,27 @@ impl eframe::App for MixerApp {
         }
 
         if !self.initialized {
-            let mut style = (*ctx.global_style()).clone();
-            style.text_styles.insert(egui::TextStyle::Body, egui::FontId::new(16.0, egui::FontFamily::Proportional));
-            style.text_styles.insert(egui::TextStyle::Button, egui::FontId::new(16.0, egui::FontFamily::Proportional));
-            style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::new(26.0, egui::FontFamily::Proportional));
-            ctx.set_global_style(style);
+            let theme = theme::Theme::pastel_pink();
+            theme::apply_theme(&ctx, &theme);
 
-            let mut visuals = egui::Visuals::dark();
-            visuals.panel_fill = egui::Color32::TRANSPARENT;
-            visuals.window_fill = egui::Color32::TRANSPARENT;
-            visuals.selection.bg_fill = egui::Color32::from_rgb(180, 180, 180);
-            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(40, 40, 40);
-            visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(60, 60, 60);
-            visuals.widgets.active.bg_fill = egui::Color32::from_rgb(220, 220, 220);
-
-            let no_shadow = egui::epaint::Shadow {
-                offset: [0, 0],
-                blur: 0,
-                spread: 0,
-                color: egui::Color32::TRANSPARENT,
-            };
-            visuals.window_shadow = no_shadow;
-            visuals.popup_shadow = no_shadow;
-
-            ctx.set_visuals(visuals);
-            
             if let Some(monitor_size) = ctx.input(|i| i.viewport().monitor_size) {
                 let center_pos = egui::pos2(
-                    (monitor_size.x - 450.0) / 2.0,
-                    (monitor_size.y - 350.0) / 2.0,
+                    (monitor_size.x - 550.0) / 2.0,
+                    (monitor_size.y - 500.0) / 2.0,
                 );
                 ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(center_pos));
             }
-            
+
             self.initialized = true;
         }
 
+
+        let theme = theme::Theme::pastel_pink();
         let panel_frame = egui::Frame::new()
-            .fill(egui::Color32::from_rgb(15, 15, 15)) 
-            .corner_radius(2.0)
-            .inner_margin(24.0)
-            .shadow(egui::epaint::Shadow { 
-                offset: [0, 10],
-                blur: 30, 
-                spread: 0, 
-                color: egui::Color32::from_black_alpha(220), 
-            });
+            .fill(theme.bg_dark) 
+            .corner_radius(theme.corner_radius)
+            .inner_margin(theme.spacing_outer)
+            .stroke(egui::Stroke::new(1.0, theme.bg_selection));
 
         egui::CentralPanel::default().frame(panel_frame).show_inside(ui, |ui| {
             let app_rect = ui.max_rect();
@@ -260,14 +249,43 @@ impl eframe::App for MixerApp {
 
             ui.horizontal(|ui| {
                 ui.heading(egui::RichText::new("oto")
-                    .color(egui::Color32::from_rgb(250, 250, 250)));
+                    .color(theme.primary_pink)
+                    .strong());
+                
+                ui.add_space(12.0);
+
+                // PTT Indicator in Top Bar
+                let ptt_enabled = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
+                let (status_text, status_color) = if !ptt_enabled {
+                    ("PTT OFF", theme.text_dim)
+                } else if self.is_ptt_held {
+                    ("• LIVE", theme.primary_pink)
+                } else {
+                    ("READY", theme.text_accent)
+                };
+
+                egui::Frame::new()
+                    .fill(status_color.gamma_multiply(0.1))
+                    .stroke(egui::Stroke::new(1.0, status_color.gamma_multiply(0.5)))
+                    .corner_radius(4)
+                    .inner_margin(egui::Margin::symmetric(8, 2))
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new(status_text)
+                            .color(status_color)
+                            .size(12.0)
+                            .strong());
+                    });
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let icon = match self.current_screen {
                         AppScreen::Mixer => "⚙",
                         AppScreen::Settings => "⬅",
                     };
-                    if ui.button(egui::RichText::new(icon).size(20.0)).clicked() {
+                    
+                    let btn = ui.add(egui::Button::new(egui::RichText::new(icon).size(18.0))
+                        .frame(false));
+                    
+                    if btn.clicked() {
                         self.current_screen = match self.current_screen {
                             AppScreen::Mixer => AppScreen::Settings,
                             AppScreen::Settings => AppScreen::Mixer,
@@ -276,6 +294,10 @@ impl eframe::App for MixerApp {
                     }
                 });
             });
+
+            ui.add_space(theme.item_spacing);
+            ui.add(egui::Separator::default().horizontal());
+            ui.add_space(theme.item_spacing);
 
             match self.current_screen {
                 AppScreen::Mixer => self.show_mixer_ui(ui),

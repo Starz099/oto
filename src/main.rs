@@ -92,7 +92,7 @@ async fn main() {
             .with_transparent(true)
             .with_always_on_top()
             .with_taskbar(false)
-            .with_inner_size([450.0, 350.0]),
+            .with_inner_size([550.0, 500.0]),
         ..Default::default()
     };
 
