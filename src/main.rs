@@ -97,7 +97,7 @@ async fn main() {
     };
 
     let _ = eframe::run_native(
-        "Raw Mixer Overlay",
+        "oto Overlay",
         native_options,
         Box::new(move |cc| {
             let ui_ctx = cc.egui_ctx.clone();
@@ -108,7 +108,7 @@ async fn main() {
             let quit_id = quit_item.id().clone();
 
             let tray_icon = TrayIconBuilder::new()
-                .with_tooltip("Raw Mixer")
+                .with_tooltip("oto")
                 .with_icon(load_tray_icon())
                 .with_menu(Box::new(tray_menu)) 
                 .build()

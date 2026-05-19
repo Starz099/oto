@@ -11,8 +11,6 @@ impl MixerApp {
         let mut nav_down = false;
         let mut vol_dec = false;
         let mut vol_inc = false;
-        let mut vol_dec_fast = false;
-        let mut vol_inc_fast = false;
         let mut jump_top = false;
         let mut jump_bottom = false;
         let mut mute_pressed = false;
@@ -28,13 +26,14 @@ impl MixerApp {
         let k_nav_down = self.parse_custom_key(&self.config.hotkeys.nav_down);
         let k_vol_dec = self.parse_custom_key(&self.config.hotkeys.vol_decrease);
         let k_vol_inc = self.parse_custom_key(&self.config.hotkeys.vol_increase);
-        let k_vol_dec_fast = self.parse_custom_key(&self.config.hotkeys.vol_decrease_fast);
-        let k_vol_inc_fast = self.parse_custom_key(&self.config.hotkeys.vol_increase_fast);
+        let k_fast_mod = self.parse_custom_key(&self.config.hotkeys.fast_modifier);
         let k_jump_top = self.parse_custom_key(&self.config.hotkeys.jump_top);
         let k_jump_bottom = self.parse_custom_key(&self.config.hotkeys.jump_bottom);
         let k_mute = self.parse_custom_key(&self.config.hotkeys.mute);
         let k_accordion_open = self.parse_custom_key(&self.config.hotkeys.accordion_open);
         let k_accordion_close = self.parse_custom_key(&self.config.hotkeys.accordion_close);
+
+        let mut fast_mod_active = false;
 
         ctx.input(|i| {
             current_time = i.time;
@@ -59,12 +58,20 @@ impl MixerApp {
                 }
             };
 
+            let is_modifier_down = |mod_opt: Option<crate::ui::CustomKey>| -> bool {
+                match mod_opt {
+                    Some(crate::ui::CustomKey::Ctrl) => i.modifiers.ctrl,
+                    Some(crate::ui::CustomKey::Alt) => i.modifiers.alt,
+                    Some(crate::ui::CustomKey::Shift) => i.modifiers.shift,
+                    _ => false,
+                }
+            };
+
             nav_up = check_key(k_nav_up);
             nav_down = check_key(k_nav_down);
             vol_dec = check_key(k_vol_dec);
             vol_inc = check_key(k_vol_inc);
-            vol_dec_fast = check_key(k_vol_dec_fast);
-            vol_inc_fast = check_key(k_vol_inc_fast);
+            fast_mod_active = is_modifier_down(k_fast_mod);
             jump_top = check_key(k_jump_top);
             jump_bottom = check_key(k_jump_bottom);
             mute_pressed = check_key(k_mute);
@@ -191,14 +198,14 @@ impl MixerApp {
                 self.selected_index = 0;
             }
 
-            if vol_dec || vol_inc || vol_dec_fast || vol_inc_fast {
-                let step = if vol_dec_fast || vol_inc_fast { 
+            if vol_dec || vol_inc {
+                let step = if fast_mod_active { 
                     self.config.settings.fast_step_percent 
                 } else { 
                     self.config.settings.normal_step_percent 
                 };
                 
-                let is_dec = vol_dec || vol_dec_fast;
+                let is_dec = vol_dec;
 
                 if self.is_discord_accordion_open && !self.discord_users.is_empty() {
                     let user = &mut self.discord_users[self.selected_discord_user_index];
@@ -241,7 +248,7 @@ impl MixerApp {
         ui.horizontal(|ui| {
             let mut ptt = self.ptt_enabled.load(std::sync::atomic::Ordering::Relaxed);
             
-            if ui.checkbox(&mut ptt, egui::RichText::new("🎙 Global PTT (Hold Ctrl)").color(egui::Color32::from_rgb(200, 200, 200))).changed() {
+            if ui.checkbox(&mut ptt, egui::RichText::new("Global PTT").color(egui::Color32::from_rgb(200, 200, 200))).changed() {
                 println!("[UI] PTT Mode Checkbox Changed: {}", if ptt { "ENABLED" } else { "DISABLED" });
                 self.ptt_enabled.store(ptt, std::sync::atomic::Ordering::Relaxed);
                 let _ = self.tx_cmd.send(UICommand::SetGlobalMicMute { muted: ptt });

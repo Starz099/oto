@@ -17,8 +17,7 @@ pub struct Hotkeys {
     pub nav_down: String,
     pub vol_decrease: String,
     pub vol_increase: String,
-    pub vol_decrease_fast: String,
-    pub vol_increase_fast: String,
+    pub fast_modifier: String,
     pub mute: String,
     pub jump_top: String,
     pub jump_bottom: String,
@@ -44,8 +43,7 @@ impl Default for AppConfig {
                 nav_down: "J".to_string(),
                 vol_decrease: "H".to_string(),
                 vol_increase: "L".to_string(),
-                vol_decrease_fast: "Shift+H".to_string(),
-                vol_increase_fast: "Shift+L".to_string(),
+                fast_modifier: "LeftShift".to_string(),
                 mute: "M".to_string(),
                 jump_top: "GG".to_string(),
                 jump_bottom: "G".to_string(),
@@ -66,7 +64,7 @@ impl Default for AppConfig {
 
 impl AppConfig {
     fn get_config_path() -> Option<PathBuf> {
-        if let Some(proj_dirs) = ProjectDirs::from("com", "RawMixer", "RawMixer") {
+        if let Some(proj_dirs) = ProjectDirs::from("com", "oto", "oto") {
             let config_dir = proj_dirs.config_dir();
             if !config_dir.exists() {
                 let _ = fs::create_dir_all(config_dir);

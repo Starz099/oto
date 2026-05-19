@@ -1,7 +1,10 @@
 [package]
-name = "raw_mixer"
+name = "oto"
 version = "0.1.0"
 edition = "2024"
+description = "A lightweight and fast, keyboard-first desktop audio mixer overlay written in Rust, featuring app-specific volume control and zero-latency global push-to-talk, currently supporting Discord."
+authors = ["Mayank"]
+license = "MIT"
 
 [dependencies]
 directories = "6.0.0"
@@ -15,6 +18,9 @@ sysinfo = "0.38.4"
 tokio = { version = "1.52.3", features = ["full"] }
 tray-icon = "0.24.0"
 windows = { version = "0.62.2", features = ["Win32_Devices_Properties", "Win32_Foundation", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell_PropertiesSystem"] }
+
+[build-dependencies]
+winres = "0.1"
 
 [profile.release]
 opt-level = 3

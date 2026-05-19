@@ -37,8 +37,7 @@ impl MixerApp {
                             ui.end_row();
                             self.keybind_row(ui, "Volume Increase", "vol_increase");
                             self.keybind_row(ui, "Volume Decrease", "vol_decrease");
-                            self.keybind_row(ui, "Volume Increase (Fast)", "vol_increase_fast");
-                            self.keybind_row(ui, "Volume Decrease (Fast)", "vol_decrease_fast");
+                            self.keybind_row(ui, "Fast Step Modifier", "fast_modifier");
                             self.keybind_row(ui, "Mute", "mute");
                         });
                 });
@@ -113,8 +112,7 @@ impl MixerApp {
                     "nav_down" => self.config.hotkeys.nav_down = key_str,
                     "vol_increase" => self.config.hotkeys.vol_increase = key_str,
                     "vol_decrease" => self.config.hotkeys.vol_decrease = key_str,
-                    "vol_increase_fast" => self.config.hotkeys.vol_increase_fast = key_str,
-                    "vol_decrease_fast" => self.config.hotkeys.vol_decrease_fast = key_str,
+                    "fast_modifier" => self.config.hotkeys.fast_modifier = key_str,
                     "jump_top" => self.config.hotkeys.jump_top = key_str,
                     "jump_bottom" => self.config.hotkeys.jump_bottom = key_str,
                     "accordion_open" => self.config.hotkeys.accordion_open = key_str,
@@ -153,8 +151,7 @@ impl MixerApp {
             "nav_down" => &self.config.hotkeys.nav_down,
             "vol_increase" => &self.config.hotkeys.vol_increase,
             "vol_decrease" => &self.config.hotkeys.vol_decrease,
-            "vol_increase_fast" => &self.config.hotkeys.vol_increase_fast,
-            "vol_decrease_fast" => &self.config.hotkeys.vol_decrease_fast,
+            "fast_modifier" => &self.config.hotkeys.fast_modifier,
             "jump_top" => &self.config.hotkeys.jump_top,
             "jump_bottom" => &self.config.hotkeys.jump_bottom,
             "accordion_open" => &self.config.hotkeys.accordion_open,

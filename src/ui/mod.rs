@@ -259,7 +259,7 @@ impl eframe::App for MixerApp {
             }
 
             ui.horizontal(|ui| {
-                ui.heading(egui::RichText::new("Raw Mixer")
+                ui.heading(egui::RichText::new("oto")
                     .color(egui::Color32::from_rgb(250, 250, 250)));
                 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
