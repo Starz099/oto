@@ -62,7 +62,7 @@
         Id='*'
         Name='oto'
         UpgradeCode='74FFBFC4-272B-42A9-954A-92FE5F29C1D9'
-        Manufacturer='Mayank'
+        Manufacturer='Starz'
         Language='1033'
         Codepage='1252'
         Version='$(var.Version)'>
@@ -70,7 +70,7 @@
         <Package Id='*'
             Keywords='Installer'
             Description='A lightweight and fast, keyboard-first desktop audio mixer overlay written in Rust, featuring app-specific volume control and zero-latency global push-to-talk, currently supporting Discord.'
-            Manufacturer='Mayank'
+            Manufacturer='Starz'
             InstallerVersion='450'
             Languages='1033'
             Compressed='yes'
@@ -86,44 +86,43 @@
         <Property Id='DiskPrompt' Value='oto Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
+            
+            <Directory Id='DesktopFolder' Name='Desktop'>
+                <Component Id='DesktopShortcut' Guid='*'>
+                    <Shortcut Id='ApplicationDesktopShortcut' Name='oto' Description='A lightweight and fast, keyboard-first desktop audio mixer overlay written in Rust.' Target='[APPLICATIONFOLDER]bin\oto.exe' WorkingDirectory='APPLICATIONFOLDER'/>
+                    <RemoveFolder Id='RemoveDesktopFolder' On='uninstall'/>
+                    <RegistryValue Root='HKCU' Key='Software\[Manufacturer]\[ProductName]' Name='desktop_shortcut' Type='integer' Value='1' KeyPath='yes'/>
+                </Component>
+            </Directory>
+
+            <Directory Id='StartupFolder' Name='Startup'>
+                <Component Id='StartupShortcut' Guid='*'>
+                    <Shortcut Id='ApplicationStartupShortcut' Name='oto' Description='A lightweight and fast, keyboard-first desktop audio mixer overlay written in Rust.' Target='[APPLICATIONFOLDER]bin\oto.exe' WorkingDirectory='APPLICATIONFOLDER'/>
+                    <RemoveFolder Id='RemoveStartupFolder' On='uninstall'/>
+                    <RegistryValue Root='HKCU' Key='Software\[Manufacturer]\[ProductName]' Name='startup_shortcut' Type='integer' Value='1' KeyPath='yes'/>
+                </Component>
+            </Directory>
+
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
                 <Directory Id='APPLICATIONFOLDER' Name='oto'>
-                    <!--
-                      Disabling the license sidecar file in the installer is a two step process:
-
-                      1. Comment out or remove the `Component` tag along with its contents.
-                      2. Comment out or remove the `ComponentRef` tag with the "License" Id
-                         attribute value further down in this file.
-                    -->
+                    
                     <Component Id='License' Guid='*'>
-                        <File Id='LicenseFile'
-                            DiskId='1'
-                            Source='wix\License.rtf'
-                            KeyPath='yes'/>
+                        <File Id='LicenseFile' DiskId='1' Source='wix\License.rtf' KeyPath='yes'/>
                     </Component>
                     
                     <Directory Id='Bin' Name='bin'>
                         <Component Id='Path' Guid='512370E0-3E8A-4A8B-9838-D61641453744' KeyPath='yes'>
-                            <Environment
-                                Id='PATH'
-                                Name='PATH'
-                                Value='[Bin]'
-                                Permanent='no'
-                                Part='last'
-                                Action='set'
-                                System='yes'/>
+                            <Environment Id='PATH' Name='PATH' Value='[Bin]' Permanent='no' Part='last' Action='set' System='yes'/>
                         </Component>
+                        
                         <Component Id='binary0' Guid='*'>
-                            <File
-                                Id='exe0'
-                                Name='oto.exe'
-                                DiskId='1'
-                                Source='$(var.CargoTargetBinDir)\oto.exe'
-                                KeyPath='yes'/>
+                            <File Id='exe0' Name='oto.exe' DiskId='1' Source='$(var.CargoTargetBinDir)\oto.exe' KeyPath='yes'/>
                         </Component>
                     </Directory>
+
                 </Directory>
             </Directory>
+
         </Directory>
 
         <Feature
@@ -135,20 +134,14 @@
             AllowAdvertise='no'
             Display='expand'
             Absent='disallow'>
-            <!--
-              Comment out or remove the following `ComponentRef` tag to remove
-              the license sidecar file from the installer.
-            -->
-            <ComponentRef Id='License'/>
             
+            <ComponentRef Id='License'/>
             <ComponentRef Id='binary0'/>
+            
+            <ComponentRef Id='DesktopShortcut'/>
+            <ComponentRef Id='StartupShortcut'/>
 
-            <Feature
-                Id='Environment'
-                Title='PATH Environment Variable'
-                Description='Add the install location of the [ProductName] executable to the PATH system environment variable. This allows the [ProductName] executable to be called from any location.'
-                Level='1'
-                Absent='allow'>
+            <Feature Id='Environment' Title='PATH Environment Variable' Description='Add the install location to PATH.' Level='1' Absent='allow'>
                 <ComponentRef Id='Path'/>
             </Feature>
         </Feature>
