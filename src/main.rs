@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 fn load_tray_icon() -> Icon {
-    let icon_bytes = include_bytes!("../assets/icon.png");
+    let icon_bytes = include_bytes!("../assets/icon.ico");
     let image = image::load_from_memory(icon_bytes).expect("Failed to parse icon image").into_rgba8();
     let (width, height) = image.dimensions();
     let rgba = image.into_raw();
