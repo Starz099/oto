@@ -25,11 +25,26 @@ Run from source:
 cargo run --release
 ```
 
-On first run the app will open the Discord authorization popup to obtain an access token. When authorization succeeds the token is saved to the per-user config and Discord features become available.
+On first run, you will need to provide your own Discord Client ID and Client Secret in the settings. This is because Discord application verification is restrictive for this type of application.
+
+## Discord Setup (Bring Your Own Credentials)
+
+To use the Discord integration features, you must create your own Discord application:
+
+1.  Go to the [Discord Developer Portal](https://discord.com/developers/applications).
+2.  Click **New Application** and give it a name (e.g., "Oto Mixer").
+3.  In the left sidebar, go to **OAuth2**.
+4.  Under **Redirects**, add `http://127.0.0.1` and click **Save Changes**.
+5.  Copy the **Client ID** from the **General Information** or **OAuth2** page.
+6.  Go to the **OAuth2** page and click **Reset Secret** (or **Copy** if you haven't reset it yet) to get your **Client Secret**.
+7.  Open Oto, go to **Settings** (gear icon), and scroll down to **Discord API**.
+8.  Paste your **Client ID** and **Client Secret**.
+9.  Click **Save Changes and Restart App**.
+10. On restart, Oto will trigger the Discord authorization popup to obtain an access token.
 
 ## Default keyboard shortcuts
 
-- Toggle overlay: `BackQuote`
+- Toggle overlay: ``BackQuote`
 - Navigate up: `K`
 - Navigate down: `J`
 - Volume decrease: `H`

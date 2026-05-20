@@ -71,9 +71,9 @@ async fn main() {
 
     if let Some(_token) = &app_config.discord_access_token {
         println!("Found saved Discord token. Skipping auth popup.");
-    } else {
+    } else if let (Some(client_id), Some(client_secret)) = (&app_config.discord_client_id, &app_config.discord_client_secret) {
         println!("No token found in config. Starting Discord auth flow...");
-        match discord::get_access_token().await {
+        match discord::get_access_token(client_id, client_secret).await {
             Ok(new_token) => {
                 println!("Successfully retrieved new Discord token.");
                 app_config.discord_access_token = Some(new_token);
@@ -81,6 +81,8 @@ async fn main() {
             }
             Err(e) => println!("OAUTH FAILED: {}", e),
         }
+    } else {
+        println!("Discord credentials (Client ID/Secret) not found in config. Skipping Discord auth.");
     }
 
     let (tx, rx) = mpsc::unbounded_channel::<AppMessage>();
@@ -139,13 +141,14 @@ async fn main() {
 
             // UNIFIED Persistent Discord Engine
             let discord_token_engine = app_config.discord_access_token.clone();
+            let discord_client_id_engine = app_config.discord_client_id.clone();
             let (tx_discord_writer, mut rx_discord_writer) = tokio::sync::mpsc::unbounded_channel::<(String, u32, bool)>();
             let tx_discord_ui = tx.clone();
             let ctx_discord_ui = ui_ctx.clone();
 
-            if let Some(token) = discord_token_engine {
+            if let (Some(token), Some(client_id)) = (discord_token_engine, discord_client_id_engine) {
                 tokio::spawn(async move {
-                    if let Ok(mut pipe) = discord::connect_to_discord().await {
+                    if let Ok(mut pipe) = discord::connect_to_discord(&client_id).await {
                         if let Ok(local_user_id) = discord::authenticate_socket(&mut pipe, &token).await {
                             println!("Unified Persistent Discord Socket locked in! (User: {})", local_user_id);
 
