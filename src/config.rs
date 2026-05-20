@@ -8,6 +8,8 @@ pub struct AppConfig {
     pub hotkeys: Hotkeys,
     pub settings: Settings,
     pub discord_access_token: Option<String>,
+    pub discord_client_id: Option<String>,
+    pub discord_client_secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +60,8 @@ impl Default for AppConfig {
                 fast_step_percent: 10.0,
             },
             discord_access_token: None,
+            discord_client_id: None,
+            discord_client_secret: None,
         }
     }
 }

@@ -3,6 +3,7 @@ use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use serde_json::json;
 use std::time::SystemTime;
 use serde::Deserialize;
+use reqwest;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct VcUser {
@@ -15,8 +16,7 @@ pub struct VcUser {
 const OP_HANDSHAKE: u32 = 0;
 const OP_FRAME: u32 = 1;
 const IPC_PATH: &str = r"\\.\pipe\discord-ipc-0";
-const DISCORD_CLIENT_ID: &str = "1505298148887630006";
-const LOCAL_API_URL: &str = "https://raw-mixer-api-inlu.vercel.app/api/auth";
+const DISCORD_TOKEN_URL: &str = "https://discord.com/api/v10/oauth2/token";
 
 /// Helper function to pack JSON into Discord's strict binary format
 async fn send_ipc_frame(pipe: &mut NamedPipeClient, opcode: u32, payload: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -51,7 +51,7 @@ async fn read_ipc_frame(pipe: &mut NamedPipeClient) -> Result<(u32, String), Box
 }
 
 /// Connects to Discord's Named Pipe and performs the initial Handshake
-pub async fn connect_to_discord() -> Result<NamedPipeClient, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn connect_to_discord(client_id: &str) -> Result<NamedPipeClient, Box<dyn std::error::Error + Send + Sync>> {
     println!("Looking for Discord IPC socket...");
     
     // Try to open the Named Pipe
@@ -67,7 +67,7 @@ pub async fn connect_to_discord() -> Result<NamedPipeClient, Box<dyn std::error:
     // Prepare the specific Handshake payload
     let handshake = json!({
         "v": 1,
-        "client_id": DISCORD_CLIENT_ID
+        "client_id": client_id
     });
 
     // Send it using Opcode 0 (OP_HANDSHAKE)
@@ -86,10 +86,10 @@ pub async fn connect_to_discord() -> Result<NamedPipeClient, Box<dyn std::error:
 }
 
 
-/// Main entry point: Connects, asks for permission, and gets the token from Vercel/Express
-pub async fn get_access_token() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+/// Main entry point: Connects, asks for permission, and gets the token directly from Discord
+pub async fn get_access_token(client_id: &str, client_secret: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // Open the socket and perform the handshake
-    let mut pipe = connect_to_discord().await?;
+    let mut pipe = connect_to_discord(client_id).await?;
 
     // Generate a quick unique nonce using system time
     let nonce = SystemTime::now()
@@ -101,7 +101,7 @@ pub async fn get_access_token() -> Result<String, Box<dyn std::error::Error + Se
     let auth_payload = json!({
         "cmd": "AUTHORIZE",
         "args": {
-            "client_id": DISCORD_CLIENT_ID,
+            "client_id": client_id,
             "scopes": ["rpc", "rpc.voice.write", "rpc.voice.read"] 
         },
         "nonce": nonce
@@ -126,24 +126,34 @@ pub async fn get_access_token() -> Result<String, Box<dyn std::error::Error + Se
         .as_str()
         .ok_or("Failed to extract authorization code from Discord response")?;
         
-    println!("Got Auth Code: {}. Verifying with Node server...", code);
+    println!("Got Auth Code: {}. Exchanging for token with Discord...", code);
 
-    // Send the code to your Express server using reqwest
+    // Exchange the code for a token directly with Discord
     let client = reqwest::Client::new();
-    let res = client.post(LOCAL_API_URL)
-        .json(&json!({ "code": code }))
+    let params = [
+        ("client_id", client_id),
+        ("client_secret", client_secret),
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", "http://127.0.0.1"),
+    ];
+
+    let res = client.post(DISCORD_TOKEN_URL)
+        .form(&params)
         .send()
         .await?;
 
-    if !res.status().is_success() {
-        return Err(format!("Express Server returned error: {}", res.status()).into());
+    let status = res.status();
+    let token_data: serde_json::Value = res.json().await?;
+
+    if !status.is_success() {
+        return Err(format!("Discord Token API returned error {}: {}", status, token_data).into());
     }
 
     // Extract the final Access Token
-    let token_data: serde_json::Value = res.json().await?;
     let access_token = token_data["access_token"]
         .as_str()
-        .ok_or("No access_token found in server response")?
+        .ok_or("No access_token found in Discord response")?
         .to_string();
 
     println!("Success! Locked in Access Token: {}", access_token);

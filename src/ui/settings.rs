@@ -45,6 +45,31 @@ impl MixerApp {
                 Self::slider_row_styled(ui, "Normal Step (%)", &mut self.config.settings.normal_step_percent, 1.0..=20.0, &theme);
                 Self::slider_row_styled(ui, "Fast Step (%)", &mut self.config.settings.fast_step_percent, 5.0..=50.0, &theme);
 
+                ui.add_space(24.0);
+                ui.label(egui::RichText::new("Discord API (Bring Your Own Credentials)").color(theme.primary_pink).strong());
+                ui.add_space(theme.item_spacing / 2.0);
+                ui.label(egui::RichText::new("You need to create a Discord Application at discord.com/developers").color(theme.text_accent).small());
+                
+                let mut client_id = self.config.discord_client_id.clone().unwrap_or_default();
+                if self.text_input_row_styled(ui, "Client ID", &mut client_id, &theme) {
+                    self.config.discord_client_id = if client_id.is_empty() { None } else { Some(client_id) };
+                    self.needs_restart = true;
+                }
+
+                let mut client_secret = self.config.discord_client_secret.clone().unwrap_or_default();
+                if self.text_input_row_styled(ui, "Client Secret", &mut client_secret, &theme) {
+                    self.config.discord_client_secret = if client_secret.is_empty() { None } else { Some(client_secret) };
+                    self.needs_restart = true;
+                }
+
+                if self.config.discord_access_token.is_some() {
+                    ui.add_space(8.0);
+                    if ui.button("Clear Token (Re-authenticate)").clicked() {
+                        self.config.discord_access_token = None;
+                        self.needs_restart = true;
+                    }
+                }
+
                 ui.add_space(16.0);
             });
 
@@ -132,6 +157,30 @@ impl MixerApp {
             let _ = std::process::Command::new(current_exe).spawn();
             std::process::exit(0);
         }
+    }
+
+    fn text_input_row_styled(&self, ui: &mut egui::Ui, label: &str, value: &mut String, theme: &theme::Theme) -> bool {
+        ui.add_space(2.0);
+        let mut changed = false;
+        egui::Frame::new()
+            .fill(theme.bg_panel.gamma_multiply(0.2))
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .corner_radius(theme.corner_radius)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).color(theme.text_main));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let response = ui.add(egui::TextEdit::singleline(value)
+                            .min_size(egui::vec2(250.0, 24.0))
+                            .margin(egui::Margin::symmetric(8, 4))
+                        );
+                        if response.changed() {
+                            changed = true;
+                        }
+                    });
+                });
+            });
+        changed
     }
 
     fn keybind_row_styled(&mut self, ui: &mut egui::Ui, label: &str, field_name: &str, theme: &theme::Theme) {
