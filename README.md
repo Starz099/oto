@@ -3,10 +3,7 @@
 A lightweight, keyboard-first desktop audio mixer overlay for windows written in Rust, featuring app-specific volume control and zero-latency global push-to-talk, currently supporting Discord.
 
 ## Demo
-<video controls loop style="max-width:100%;height:auto;">
-	<source src="oto_demo.mp4" type="video/mp4">
-	Your browser does not support the video tag. Download the demo: [oto_demo.mp4](assets/oto_demo.mp4)
-</video>
+https://github.com/user-attachments/assets/842a8917-2b43-42c0-854a-5d4815255a61
 
 ## Features
 
