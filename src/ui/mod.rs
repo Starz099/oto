@@ -29,14 +29,13 @@ pub enum CustomKey {
 pub struct MixerApp {
     pub(crate) initialized: bool,
     pub(crate) is_visible: bool,
-    pub(crate) raw_sessions: Vec<AudioProcess>,
     pub(crate) sessions: Vec<AudioProcess>,
     pub(crate) rx: UnboundedReceiver<AppMessage>,
     pub(crate) tx_cmd: UnboundedSender<UICommand>,
     pub(crate) _tray_icon: TrayIcon,
-    pub(crate) config: AppConfig,
+    pub(crate) config: Arc<AppConfig>,
     pub(crate) selected_index: usize,
-    pub(crate) saved_volumes: HashMap<u32, f32>,
+    pub(crate) saved_volumes: HashMap<String, f32>,
     pub(crate) discord_users: Vec<VcUser>,
     pub(crate) is_discord_accordion_open: bool,
     pub(crate) selected_discord_user_index: usize,
@@ -49,12 +48,11 @@ pub struct MixerApp {
 }
 
 impl MixerApp {
-    pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>, tray_icon: TrayIcon, config: AppConfig, ptt_enabled: Arc<AtomicBool>) -> Self {
+    pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>, tray_icon: TrayIcon, config: Arc<AppConfig>, ptt_enabled: Arc<AtomicBool>) -> Self {
         let original_hotkeys = config.hotkeys.clone();
         Self {
             initialized: false,
             is_visible: true,
-            raw_sessions: Vec::new(),
             sessions: Vec::new(),
             rx,
             tx_cmd,
@@ -158,34 +156,15 @@ impl eframe::App for MixerApp {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 AppMessage::UpdateSessions(new_sessions) => {
-                    let mut normalized_sessions = Vec::new();
                     let mut unique_sessions = Vec::new();
                     let mut seen_names = HashSet::new();
                     
-                    for mut session in new_sessions {
-                        // Clean up session name: chrome.exe -> Chrome
-                        let cleaned_name = if session.name.to_lowercase().ends_with(".exe") {
-                            let stem = &session.name[..session.name.len() - 4];
-                            let mut chars = stem.chars();
-                            match chars.next() {
-                                None => stem.to_string(),
-                                Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
-                            }
-                        } else {
-                            session.name.clone()
-                        };
-                        session.name = cleaned_name;
-                        normalized_sessions.push(session.clone());
-
+                    for session in new_sessions {
                         if !seen_names.contains(&session.name) {
                             seen_names.insert(session.name.clone());
                             unique_sessions.push(session);
                         }
                     }
-
-                    // Keep the raw cache normalized too so later volume updates match the
-                    // same labels the UI shows.
-                    self.raw_sessions = normalized_sessions;
 
                     let selected_name = self.sessions.get(self.selected_index).map(|s| s.name.clone());
                     self.sessions = unique_sessions;

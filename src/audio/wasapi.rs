@@ -1,4 +1,4 @@
-use windows::core::{Interface, Result, PWSTR};
+use windows::core::{Interface, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
@@ -12,55 +12,59 @@ use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use crate::app::AudioProcess;
+use crate::core::AudioError;
 
-// Fetch Active Audio Sessions
-pub fn get_active_sessions() -> Result<Vec<AudioProcess>> {
-    let mut sessions_list = Vec::new();
+pub struct WasapiManager;
 
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();
+impl WasapiManager {
+    pub fn new() -> Self {
+        Self
+    }
 
-        // Get Audio Device Enumerator
-        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
+    pub fn get_active_sessions(&self) -> std::result::Result<Vec<AudioProcess>, AudioError> {
+        let mut sessions_list = Vec::new();
 
-        // Activate Audio Session Manager
-        let session_manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
-        
-        // Get the Session Enumerator (List of all active audio apps)
-        let session_enumerator = session_manager.GetSessionEnumerator()?;
-        let session_count = session_enumerator.GetCount()?;
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(AudioError::Com)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)
+                .map_err(AudioError::Com)?;
 
-        // Add System Master Volume as PID 0
-        let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
-        let master_vol = endpoint_volume.GetMasterVolumeLevelScalar()?;
-        sessions_list.push(AudioProcess {
-            pid: 0,
-            name: "System Master".to_string(),
-            volume: master_vol * 100.0,
-        });
+            let session_manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)
+                .map_err(AudioError::Com)?;
+            
+            let session_enumerator = session_manager.GetSessionEnumerator()
+                .map_err(AudioError::Com)?;
+            let session_count = session_enumerator.GetCount()
+                .map_err(AudioError::Com)?;
 
-        // Loop through all active apps
-        for i in 0..session_count {
-            if let Ok(session) = session_enumerator.GetSession(i) {
-                // Get the SimpleAudioVolume interface to read volume
-                if let Ok(simple_volume) = session.cast::<ISimpleAudioVolume>() {
-                    // Naya Rustic tareeka: direct return catch karo
-                    if let Ok(current_vol) = simple_volume.GetMasterVolume() {
-                        
-                        // We need IAudioSessionControl2 to get the Process ID (PID)
-                        if let Ok(control) = session.cast::<IAudioSessionControl2>() {
-                            
-                            if let Ok(pid) = control.GetProcessId() {
-                                if pid != 0 {
-                                    // Fetch the human-readable .exe name using the PID
-                                    let name = get_process_name(pid).unwrap_or_else(|| format!("Unknown ({})", pid));
-                                    
-                                    sessions_list.push(AudioProcess {
-                                        pid,
-                                        name,
-                                        volume: current_vol * 100.0,
-                                    });
+            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+                .map_err(AudioError::Com)?;
+            let master_vol = endpoint_volume.GetMasterVolumeLevelScalar()
+                .map_err(AudioError::Com)?;
+            
+            sessions_list.push(AudioProcess {
+                pid: 0,
+                name: "System Master".to_string(),
+                volume: master_vol * 100.0,
+            });
+
+            for i in 0..session_count {
+                if let Ok(session) = session_enumerator.GetSession(i) {
+                    if let Ok(simple_volume) = session.cast::<ISimpleAudioVolume>() {
+                        if let Ok(current_vol) = simple_volume.GetMasterVolume() {
+                            if let Ok(control) = session.cast::<IAudioSessionControl2>() {
+                                if let Ok(pid) = control.GetProcessId() {
+                                    if pid != 0 {
+                                        let raw_name = get_process_name(pid).unwrap_or_else(|| format!("Unknown ({})", pid));
+                                        let normalized_name = normalize_process_name(&raw_name);
+                                        sessions_list.push(AudioProcess {
+                                            pid,
+                                            name: normalized_name,
+                                            volume: current_vol * 100.0,
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -68,51 +72,67 @@ pub fn get_active_sessions() -> Result<Vec<AudioProcess>> {
                 }
             }
         }
+
+        Ok(sessions_list)
     }
 
-    Ok(sessions_list)
-}
+    pub fn set_process_volume(&self, target_pid: u32, volume_percent: f32) -> std::result::Result<(), AudioError> {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(AudioError::Com)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)
+                .map_err(AudioError::Com)?;
 
-// Set Volume for a Specific App or System
-pub fn set_process_volume(target_pid: u32, volume_percent: f32) -> Result<()> {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED).ok();
-        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
+            if target_pid == 0 {
+                let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+                    .map_err(AudioError::Com)?;
+                return endpoint_volume.SetMasterVolumeLevelScalar(volume_percent / 100.0, std::ptr::null())
+                    .map_err(AudioError::Com);
+            }
 
-        // If PID is 0, update Master System Volume
-        if target_pid == 0 {
-            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
-            return endpoint_volume.SetMasterVolumeLevelScalar(volume_percent / 100.0, std::ptr::null());
-        }
+            let session_manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)
+                .map_err(AudioError::Com)?;
+            let session_enumerator = session_manager.GetSessionEnumerator()
+                .map_err(AudioError::Com)?;
+            let session_count = session_enumerator.GetCount()
+                .map_err(AudioError::Com)?;
 
-        // Otherwise, find the specific app and change its volume
-        let session_manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
-        let session_enumerator = session_manager.GetSessionEnumerator()?;
-        let session_count = session_enumerator.GetCount()?;
-
-        for i in 0..session_count {
-            if let Ok(session) = session_enumerator.GetSession(i) {
-                if let Ok(control) = session.cast::<IAudioSessionControl2>() {
-                    if let Ok(pid) = control.GetProcessId() {
-                        if pid == target_pid {
-                            if let Ok(simple_volume) = session.cast::<ISimpleAudioVolume>() {
-                                simple_volume.SetMasterVolume(volume_percent / 100.0, std::ptr::null())?;
-                                break;
+            for i in 0..session_count {
+                if let Ok(session) = session_enumerator.GetSession(i) {
+                    if let Ok(control) = session.cast::<IAudioSessionControl2>() {
+                        if let Ok(pid) = control.GetProcessId() {
+                            if pid == target_pid {
+                                if let Ok(simple_volume) = session.cast::<ISimpleAudioVolume>() {
+                                    simple_volume.SetMasterVolume(volume_percent / 100.0, std::ptr::null())
+                                        .map_err(AudioError::Com)?;
+                                    return Ok(());
+                                }
                             }
                         }
                     }
                 }
             }
         }
+        Ok(())
     }
-    Ok(())
 }
 
-// Helper: Convert PID to .exe name
+fn normalize_process_name(name: &str) -> String {
+    if name.to_lowercase().ends_with(".exe") {
+        let stem = &name[..name.len() - 4];
+        let mut chars = stem.chars();
+        match chars.next() {
+            None => stem.to_string(),
+            Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    } else {
+        name.to_string()
+    }
+}
+
 fn get_process_name(pid: u32) -> Option<String> {
     unsafe {
-        // Open the process with limited info rights
         let handle: HANDLE = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
         
         let mut buffer = [0u16; 1024];
@@ -130,43 +150,47 @@ fn get_process_name(pid: u32) -> Option<String> {
     }
 }
 
-
 pub struct PersistentMic {
     endpoint_volume: IAudioEndpointVolume,
 }
 
-// Safely tell Rust we can share this COM pointer across our Tokio threads
 unsafe impl Send for PersistentMic {}
 unsafe impl Sync for PersistentMic {}
 
 impl PersistentMic {
-    pub fn new() -> std::result::Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new() -> std::result::Result<Self, AudioError> {
         unsafe {
-            // Initialize MTA (Multi-Threaded Apartment) for background engine
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)?;
-            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(AudioError::Com)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
+                .map_err(AudioError::Com)?;
+            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+                .map_err(AudioError::Com)?;
             
             Ok(Self { endpoint_volume })
         }
     }
 
-    pub fn set_mute(&self, mute: bool) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn set_mute(&self, mute: bool) -> std::result::Result<(), AudioError> {
         unsafe {
-            self.endpoint_volume.SetMute(mute, std::ptr::null())?;
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            self.endpoint_volume.SetMute(mute, std::ptr::null())
+                .map_err(AudioError::Com)?;
         }
         Ok(())
     }
 
-    pub fn refresh(&mut self) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn refresh(&mut self) -> std::result::Result<(), AudioError> {
         unsafe {
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)?;
-            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(AudioError::Com)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
+                .map_err(AudioError::Com)?;
+            let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+                .map_err(AudioError::Com)?;
             
-            // Overwrite the old pointer with the fresh one
             self.endpoint_volume = endpoint_volume;
         }
         Ok(())

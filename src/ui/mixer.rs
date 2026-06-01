@@ -158,27 +158,21 @@ impl MixerApp {
                         mute: user.mute,
                     });
                 } else {
-                    let current_vol = self.sessions[self.selected_index].volume;
-                    let target_name = self.sessions[self.selected_index].name.clone();
+                    let session = &mut self.sessions[self.selected_index];
+                    let is_muted = session.volume == 0.0;
                     
-                    let is_muted = current_vol == 0.0;
                     let new_vol = if is_muted { 
-                        self.saved_volumes.remove(&self.sessions[self.selected_index].pid).unwrap_or(100.0)
+                        self.saved_volumes.remove(&session.name).unwrap_or(100.0)
                     } else { 
+                        self.saved_volumes.insert(session.name.clone(), session.volume);
                         0.0 
                     };
 
-                    self.sessions[self.selected_index].volume = new_vol;
-                    
-                    for raw_session in &mut self.raw_sessions {
-                        if raw_session.name == target_name {
-                            if !is_muted {
-                                self.saved_volumes.insert(raw_session.pid, raw_session.volume);
-                            }
-                            raw_session.volume = new_vol;
-                            let _ = self.tx_cmd.send(UICommand::SetProcessVolume { pid: raw_session.pid, volume: new_vol });
-                        }
-                    }
+                    session.volume = new_vol;
+                    let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
+                        name: session.name.clone(), 
+                        volume: new_vol 
+                    });
                 }
             }
 
@@ -207,23 +201,19 @@ impl MixerApp {
                         mute: user.mute,
                     });
                 } else {
-                    let current_vol = self.sessions[self.selected_index].volume;
+                    let session = &mut self.sessions[self.selected_index];
+                    let current_vol = session.volume;
                     let new_vol = if is_dec { 
                         (current_vol - step).max(0.0) 
                     } else { 
                         (current_vol + step).min(100.0) 
                     };
 
-                    let target_name = self.sessions[self.selected_index].name.clone();
-                    self.sessions[self.selected_index].volume = new_vol;
-                    
-                    for raw_session in &mut self.raw_sessions {
-                        if raw_session.name == target_name {
-                            raw_session.volume = new_vol;
-                            self.saved_volumes.remove(&raw_session.pid);
-                            let _ = self.tx_cmd.send(UICommand::SetProcessVolume { pid: raw_session.pid, volume: new_vol });
-                        }
-                    }
+                    session.volume = new_vol;
+                    let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
+                        name: session.name.clone(), 
+                        volume: new_vol 
+                    });
                 }
             }
         }
@@ -282,17 +272,10 @@ impl MixerApp {
                                         .show_value(false));
                                     
                                     if slider_response.changed() {
-                                        let target_name = session.name.clone();
-                                        for raw_session in &mut self.raw_sessions {
-                                            if raw_session.name == target_name {
-                                                raw_session.volume = session.volume;
-                                                self.saved_volumes.remove(&raw_session.pid);
-                                                let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
-                                                    pid: raw_session.pid, 
-                                                    volume: session.volume 
-                                                });
-                                            }
-                                        }
+                                        let _ = self.tx_cmd.send(UICommand::SetProcessVolume { 
+                                            name: session.name.clone(), 
+                                            volume: session.volume 
+                                        });
                                     }
                                 });
                             });

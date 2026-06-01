@@ -1,12 +1,16 @@
 use eframe::egui;
 use crate::ui::MixerApp;
 use crate::ui::theme;
+use std::sync::Arc;
 
 impl MixerApp {
     pub(crate) fn show_settings_ui(&mut self, ui: &mut egui::Ui) {
         let theme = theme::Theme::pastel_pink();
         ui.add_space(8.0);
         
+        let mut config = (*self.config).clone();
+        let mut config_changed = false;
+
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .max_height(ui.available_height() - 80.0)
@@ -42,30 +46,33 @@ impl MixerApp {
                 ui.label(egui::RichText::new("General Settings").color(theme.primary_pink).strong());
                 ui.add_space(theme.item_spacing / 2.0);
 
-                Self::slider_row_styled(ui, "Normal Step (%)", &mut self.config.settings.normal_step_percent, 1.0..=20.0, &theme);
-                Self::slider_row_styled(ui, "Fast Step (%)", &mut self.config.settings.fast_step_percent, 5.0..=50.0, &theme);
+                if Self::slider_row_styled(ui, "Normal Step (%)", &mut config.settings.normal_step_percent, 1.0..=20.0, &theme) { config_changed = true; }
+                if Self::slider_row_styled(ui, "Fast Step (%)", &mut config.settings.fast_step_percent, 5.0..=50.0, &theme) { config_changed = true; }
 
                 ui.add_space(24.0);
                 ui.label(egui::RichText::new("Discord API (Bring Your Own Credentials)").color(theme.primary_pink).strong());
                 ui.add_space(theme.item_spacing / 2.0);
                 ui.label(egui::RichText::new("You need to create a Discord Application at discord.com/developers").color(theme.text_accent).small());
                 
-                let mut client_id = self.config.discord_client_id.clone().unwrap_or_default();
+                let mut client_id = config.discord_client_id.clone().unwrap_or_default();
                 if self.text_input_row_styled(ui, "Client ID", &mut client_id, &theme) {
-                    self.config.discord_client_id = if client_id.is_empty() { None } else { Some(client_id) };
+                    config.discord_client_id = if client_id.is_empty() { None } else { Some(client_id) };
+                    config_changed = true;
                     self.needs_restart = true;
                 }
 
-                let mut client_secret = self.config.discord_client_secret.clone().unwrap_or_default();
+                let mut client_secret = config.discord_client_secret.clone().unwrap_or_default();
                 if self.text_input_row_styled(ui, "Client Secret", &mut client_secret, &theme) {
-                    self.config.discord_client_secret = if client_secret.is_empty() { None } else { Some(client_secret) };
+                    config.discord_client_secret = if client_secret.is_empty() { None } else { Some(client_secret) };
+                    config_changed = true;
                     self.needs_restart = true;
                 }
 
-                if self.config.discord_access_token.is_some() {
+                if config.discord_access_token.is_some() {
                     ui.add_space(8.0);
                     if ui.button("Clear Token (Re-authenticate)").clicked() {
-                        self.config.discord_access_token = None;
+                        config.discord_access_token = None;
+                        config_changed = true;
                         self.needs_restart = true;
                     }
                 }
@@ -93,14 +100,15 @@ impl MixerApp {
         );
 
         if save_btn.clicked() {
-            self.config.save();
+            config.save();
+            self.config = Arc::new(config.clone());
             if self.needs_restart {
                 self.restart_app();
             }
         }
         ui.add_space(12.0);
 
-        // Key Grabber Logic (unchanged functionality)
+        // Key Grabber Logic
         if let Some(field_name) = self.recording_keybind.clone() {
             let mut captured_key = None;
             
@@ -125,30 +133,35 @@ impl MixerApp {
             if let Some(key) = captured_key {
                 let key_str = self.custom_key_to_str(key);
                 match field_name.as_str() {
-                    "toggle_overlay" => self.config.hotkeys.toggle_overlay = key_str,
-                    "ptt_mode_toggle" => self.config.hotkeys.ptt_mode_toggle = key_str,
-                    "ptt_mic_hold" => self.config.hotkeys.ptt_mic_hold = key_str,
-                    "nav_up" => self.config.hotkeys.nav_up = key_str,
-                    "nav_down" => self.config.hotkeys.nav_down = key_str,
-                    "vol_increase" => self.config.hotkeys.vol_increase = key_str,
-                    "vol_decrease" => self.config.hotkeys.vol_decrease = key_str,
-                    "fast_modifier" => self.config.hotkeys.fast_modifier = key_str,
-                    "jump_top" => self.config.hotkeys.jump_top = key_str,
-                    "jump_bottom" => self.config.hotkeys.jump_bottom = key_str,
-                    "accordion_open" => self.config.hotkeys.accordion_open = key_str,
-                    "accordion_close" => self.config.hotkeys.accordion_close = key_str,
-                    "mute" => self.config.hotkeys.mute = key_str,
+                    "toggle_overlay" => config.hotkeys.toggle_overlay = key_str,
+                    "ptt_mode_toggle" => config.hotkeys.ptt_mode_toggle = key_str,
+                    "ptt_mic_hold" => config.hotkeys.ptt_mic_hold = key_str,
+                    "nav_up" => config.hotkeys.nav_up = key_str,
+                    "nav_down" => config.hotkeys.nav_down = key_str,
+                    "vol_increase" => config.hotkeys.vol_increase = key_str,
+                    "vol_decrease" => config.hotkeys.vol_decrease = key_str,
+                    "fast_modifier" => config.hotkeys.fast_modifier = key_str,
+                    "jump_top" => config.hotkeys.jump_top = key_str,
+                    "jump_bottom" => config.hotkeys.jump_bottom = key_str,
+                    "accordion_open" => config.hotkeys.accordion_open = key_str,
+                    "accordion_close" => config.hotkeys.accordion_close = key_str,
+                    "mute" => config.hotkeys.mute = key_str,
                     _ => {}
                 }
 
-                if self.config.hotkeys.toggle_overlay != self.original_hotkeys.toggle_overlay ||
-                   self.config.hotkeys.ptt_mode_toggle != self.original_hotkeys.ptt_mode_toggle ||
-                   self.config.hotkeys.ptt_mic_hold != self.original_hotkeys.ptt_mic_hold {
+                if config.hotkeys.toggle_overlay != self.original_hotkeys.toggle_overlay ||
+                   config.hotkeys.ptt_mode_toggle != self.original_hotkeys.ptt_mode_toggle ||
+                   config.hotkeys.ptt_mic_hold != self.original_hotkeys.ptt_mic_hold {
                     self.needs_restart = true;
                 }
 
                 self.recording_keybind = None;
+                config_changed = true;
             }
+        }
+
+        if config_changed {
+            self.config = Arc::new(config);
         }
     }
 
@@ -226,8 +239,9 @@ impl MixerApp {
             });
     }
 
-    fn slider_row_styled(ui: &mut egui::Ui, label: &str, value: &mut f32, range: std::ops::RangeInclusive<f32>, theme: &theme::Theme) {
+    fn slider_row_styled(ui: &mut egui::Ui, label: &str, value: &mut f32, range: std::ops::RangeInclusive<f32>, theme: &theme::Theme) -> bool {
         ui.add_space(2.0);
+        let mut changed = false;
         egui::Frame::new()
             .fill(theme.bg_panel.gamma_multiply(0.2))
             .inner_margin(egui::Margin::symmetric(12, 8))
@@ -236,10 +250,13 @@ impl MixerApp {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(label).color(theme.text_main));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add(egui::Slider::new(value, range).show_value(true));
+                        if ui.add(egui::Slider::new(value, range).show_value(true)).changed() {
+                            changed = true;
+                        }
                     });
                 });
             });
+        changed
     }
 
     fn custom_key_to_str(&self, key: crate::ui::CustomKey) -> String {
