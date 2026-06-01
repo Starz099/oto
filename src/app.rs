@@ -14,7 +14,7 @@ pub enum AppMessage {
 }
 
 pub enum UICommand {
-    SetProcessVolume { pid: u32, volume: f32 },
+    SetProcessVolume { name: String, volume: f32 },
     SetDiscordUserVolume { user_id: String, volume: u32, mute: bool },
     SetGlobalMicMute { muted: bool },
 }

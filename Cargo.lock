@@ -3334,6 +3334,7 @@ dependencies = [
 name = "oto"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "directories",
  "eframe",
  "image",
@@ -3342,6 +3343,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sysinfo",
+ "thiserror 2.0.18",
  "tokio",
  "tray-icon",
  "windows",
