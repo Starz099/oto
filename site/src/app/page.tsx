@@ -239,7 +239,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-oto-dark flex flex-col justify-between overflow-x-hidden">
+    <div className="min-h-screen bg-oto-dark noise-bg flex flex-col justify-between overflow-x-hidden">
       
       {/* HEADER NAVBAR */}
       <header className="max-w-6xl mx-auto w-full px-6 py-6 flex items-center justify-between border-b border-oto-selection/40">
@@ -607,7 +607,7 @@ export default function Home() {
           </div>
 
           {/* Right Column: Keybinds Map */}
-          <div className="bg-[#151518] p-8 rounded-2xl border border-oto-selection/60 space-y-6 flex flex-col justify-center">
+          <div className="p-8 rounded-2xl border border-oto-selection/60 space-y-6 flex flex-col justify-center">
             <h3 className="font-display font-bold text-base text-oto-white flex items-center gap-2 border-b border-oto-selection/40 pb-4">
               <Keyboard size={18} className="text-oto-pink" />
               <span>Default Keybindings Reference</span>
@@ -696,7 +696,7 @@ export default function Home() {
         {/* Content Split */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           {/* Left: Redirect Info Panel */}
-          <div className="lg:col-span-5 bg-[#151518]/50 p-6 rounded-xl border border-oto-selection/60 space-y-4">
+          <div className="lg:col-span-5 p-6 rounded-xl border border-oto-selection/60 space-y-4">
             <h3 className="font-display font-bold text-sm text-oto-white flex items-center gap-2">
               <Info size={16} className="text-oto-pink shrink-0" />
               <span>OAuth2 Redirect Configuration</span>
@@ -786,7 +786,7 @@ export default function Home() {
 
       {/* FINAL CALL TO ACTION */}
       <section className="max-w-6xl mx-auto w-full px-6 pb-24 text-center">
-        <div className="bg-gradient-to-b from-[#151518] to-[#101013] p-12 rounded-2xl border border-oto-selection/60 space-y-8 shadow-xl">
+        <div className="p-12 space-y-8">
           <div className="space-y-3">
             <h2 className="text-3xl md:text-4xl font-display font-bold text-oto-white">Take control of your audio workflow.</h2>
             <p className="text-xs md:text-sm text-oto-slate max-w-lg mx-auto font-sans font-light">

@@ -98,3 +98,11 @@ body {
   pointer-events: none;
   z-index: 0;
 }
+
+/* Film grain noise background (muted with dark brand overlay) */
+.noise-bg {
+  background-image: linear-gradient(rgba(15, 15, 18, 0.75), rgba(15, 15, 18, 0.444)), url('/assets/grain-bg.webp');
+  background-size: 100% auto;
+  background-position: top center;
+  background-repeat: repeat-y;
+}
