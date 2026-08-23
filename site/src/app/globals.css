@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  --foreground-rgb: 235, 235, 240;
+  --background-start-rgb: 15, 15, 18;
+  --background-end-rgb: 15, 15, 18;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-start-rgb));
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom styles for high-fidelity interactive elements */
+.slider-track {
+  background: #231E23;
+  height: 4px;
+  border-radius: 2px;
+  position: relative;
+}
+
+.slider-fill {
+  background: #FFB6C1;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.slider-thumb {
+  width: 12px;
+  height: 12px;
+  background: #F8C8DC;
+  border: 1px solid #FFB6C1;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease;
+}
+
+.slider-thumb.active {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 0 8px rgba(248, 200, 220, 0.6);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F0F12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #231E23;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FFB6C1;
+}
+
+/* Diagonal shine sheen animation for key primary CTA buttons */
+@keyframes custom-shine-key {
+  0% {
+    left: -150%;
+  }
+  50% {
+    left: 150%;
+  }
+  100% {
+    left: 150%;
+  }
+}
+
+.custom-shine-element {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-20deg);
+  animation: custom-shine-key 3.5s infinite ease-in-out;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Film grain noise background (muted with dark brand overlay) */
+.noise-bg {
+  background-image: linear-gradient(rgba(15, 15, 18, 0.75), rgba(15, 15, 18, 0.444)), url('/assets/grain-bg.webp');
+  background-size: 100% auto;
+  background-position: top center;
+  background-repeat: repeat-y;
+}
