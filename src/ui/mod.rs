@@ -12,6 +12,9 @@ mod mixer;
 mod settings;
 mod theme;
 
+pub const WINDOW_WIDTH: f32 = 550.0;
+pub const WINDOW_HEIGHT: f32 = 500.0;
+
 #[derive(PartialEq)]
 pub enum AppScreen {
     Mixer,
@@ -24,6 +27,21 @@ pub enum CustomKey {
     Ctrl,
     Alt,
     Shift,
+}
+
+pub struct CachedKeybinds {
+    pub ptt_mode_toggle: Option<CustomKey>,
+    pub ptt_mic_hold: Option<CustomKey>,
+    pub nav_up: Option<CustomKey>,
+    pub nav_down: Option<CustomKey>,
+    pub vol_increase: Option<CustomKey>,
+    pub vol_decrease: Option<CustomKey>,
+    pub fast_modifier: Option<CustomKey>,
+    pub jump_top: Option<CustomKey>,
+    pub jump_bottom: Option<CustomKey>,
+    pub accordion_open: Option<CustomKey>,
+    pub accordion_close: Option<CustomKey>,
+    pub mute: Option<CustomKey>,
 }
 
 pub struct MixerApp {
@@ -45,19 +63,21 @@ pub struct MixerApp {
     pub(crate) recording_keybind: Option<String>,
     pub(crate) needs_restart: bool,
     pub(crate) original_hotkeys: crate::config::Hotkeys,
+    pub(crate) theme: theme::Theme,
+    pub(crate) keybinds_cache: CachedKeybinds,
 }
 
 impl MixerApp {
     pub fn new(rx: UnboundedReceiver<AppMessage>, tx_cmd: UnboundedSender<UICommand>, tray_icon: TrayIcon, config: Arc<AppConfig>, ptt_enabled: Arc<AtomicBool>) -> Self {
         let original_hotkeys = config.hotkeys.clone();
-        Self {
+        let mut app = Self {
             initialized: false,
             is_visible: true,
             sessions: Vec::new(),
             rx,
             tx_cmd,
             _tray_icon: tray_icon,
-            config,
+            config: config.clone(),
             selected_index: 0,
             saved_volumes: HashMap::new(),
             discord_users: Vec::new(),
@@ -69,7 +89,41 @@ impl MixerApp {
             recording_keybind: None,
             needs_restart: false,
             original_hotkeys,
-        }
+            theme: theme::Theme::pastel_pink(),
+            keybinds_cache: CachedKeybinds {
+                ptt_mode_toggle: None,
+                ptt_mic_hold: None,
+                nav_up: None,
+                nav_down: None,
+                vol_increase: None,
+                vol_decrease: None,
+                fast_modifier: None,
+                jump_top: None,
+                jump_bottom: None,
+                accordion_open: None,
+                accordion_close: None,
+                mute: None,
+            },
+        };
+        app.update_keybinds_cache(&config);
+        app
+    }
+
+    pub(crate) fn update_keybinds_cache(&mut self, config: &AppConfig) {
+        self.keybinds_cache = CachedKeybinds {
+            ptt_mode_toggle: self.parse_custom_key(&config.hotkeys.ptt_mode_toggle),
+            ptt_mic_hold: self.parse_custom_key(&config.hotkeys.ptt_mic_hold),
+            nav_up: self.parse_custom_key(&config.hotkeys.nav_up),
+            nav_down: self.parse_custom_key(&config.hotkeys.nav_down),
+            vol_increase: self.parse_custom_key(&config.hotkeys.vol_increase),
+            vol_decrease: self.parse_custom_key(&config.hotkeys.vol_decrease),
+            fast_modifier: self.parse_custom_key(&config.hotkeys.fast_modifier),
+            jump_top: self.parse_custom_key(&config.hotkeys.jump_top),
+            jump_bottom: self.parse_custom_key(&config.hotkeys.jump_bottom),
+            accordion_open: self.parse_custom_key(&config.hotkeys.accordion_open),
+            accordion_close: self.parse_custom_key(&config.hotkeys.accordion_close),
+            mute: self.parse_custom_key(&config.hotkeys.mute),
+        };
     }
 
     pub(crate) fn parse_custom_key(&self, key_str: &str) -> Option<CustomKey> {
@@ -187,8 +241,8 @@ impl eframe::App for MixerApp {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                         if let Some(monitor_size) = ctx.input(|i| i.viewport().monitor_size) {
                             let center_pos = egui::pos2(
-                                (monitor_size.x - 550.0) / 2.0,
-                                (monitor_size.y - 500.0) / 2.0,
+                                (monitor_size.x - WINDOW_WIDTH) / 2.0,
+                                (monitor_size.y - WINDOW_HEIGHT) / 2.0,
                             );
                             ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(center_pos));
                         }
@@ -201,13 +255,12 @@ impl eframe::App for MixerApp {
         }
 
         if !self.initialized {
-            let theme = theme::Theme::pastel_pink();
-            theme::apply_theme(&ctx, &theme);
+            theme::apply_theme(&ctx, &self.theme);
 
             if let Some(monitor_size) = ctx.input(|i| i.viewport().monitor_size) {
                 let center_pos = egui::pos2(
-                    (monitor_size.x - 550.0) / 2.0,
-                    (monitor_size.y - 500.0) / 2.0,
+                    (monitor_size.x - WINDOW_WIDTH) / 2.0,
+                    (monitor_size.y - WINDOW_HEIGHT) / 2.0,
                 );
                 ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(center_pos));
             }
@@ -216,7 +269,7 @@ impl eframe::App for MixerApp {
         }
 
 
-        let theme = theme::Theme::pastel_pink();
+        let theme = self.theme;
         let panel_frame = egui::Frame::new()
             .fill(theme.bg_dark) 
             .corner_radius(theme.corner_radius)

@@ -1,12 +1,11 @@
 use eframe::egui;
 use crate::ui::MixerApp;
 use crate::app::UICommand;
-use crate::ui::theme;
 
 impl MixerApp {
     pub(crate) fn show_mixer_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
-        let theme = theme::Theme::pastel_pink();
+        let theme = &self.theme;
         
         let mut hide_requested = false;
         let mut nav_up = false;
@@ -19,19 +18,19 @@ impl MixerApp {
         let mut accordion_open = false;
         let mut accordion_close = false;
 
-        let ptt_mode_egui_key = self.parse_custom_key(&self.config.hotkeys.ptt_mode_toggle);
-        let ptt_hold_egui_key = self.parse_custom_key(&self.config.hotkeys.ptt_mic_hold);
+        let ptt_mode_egui_key = self.keybinds_cache.ptt_mode_toggle;
+        let ptt_hold_egui_key = self.keybinds_cache.ptt_mic_hold;
 
-        let k_nav_up = self.parse_custom_key(&self.config.hotkeys.nav_up);
-        let k_nav_down = self.parse_custom_key(&self.config.hotkeys.nav_down);
-        let k_vol_dec = self.parse_custom_key(&self.config.hotkeys.vol_decrease);
-        let k_vol_inc = self.parse_custom_key(&self.config.hotkeys.vol_increase);
-        let k_fast_mod = self.parse_custom_key(&self.config.hotkeys.fast_modifier);
-        let k_jump_top = self.parse_custom_key(&self.config.hotkeys.jump_top);
-        let k_jump_bottom = self.parse_custom_key(&self.config.hotkeys.jump_bottom);
-        let k_mute = self.parse_custom_key(&self.config.hotkeys.mute);
-        let k_accordion_open = self.parse_custom_key(&self.config.hotkeys.accordion_open);
-        let k_accordion_close = self.parse_custom_key(&self.config.hotkeys.accordion_close);
+        let k_nav_up = self.keybinds_cache.nav_up;
+        let k_nav_down = self.keybinds_cache.nav_down;
+        let k_vol_dec = self.keybinds_cache.vol_decrease;
+        let k_vol_inc = self.keybinds_cache.vol_increase;
+        let k_fast_mod = self.keybinds_cache.fast_modifier;
+        let k_jump_top = self.keybinds_cache.jump_top;
+        let k_jump_bottom = self.keybinds_cache.jump_bottom;
+        let k_mute = self.keybinds_cache.mute;
+        let k_accordion_open = self.keybinds_cache.accordion_open;
+        let k_accordion_close = self.keybinds_cache.accordion_close;
 
         let mut fast_mod_active = false;
 

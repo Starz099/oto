@@ -3,16 +3,61 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
     eMultimedia, eRender, IAudioSessionControl2, eCapture, eConsole,
-    IAudioSessionManager2, ISimpleAudioVolume, IMMDeviceEnumerator, MMDeviceEnumerator,
+    IAudioSessionManager2, ISimpleAudioVolume, IMMDeviceEnumerator, MMDeviceEnumerator, IMMDevice,
 };
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use crate::app::AudioProcess;
 use crate::core::AudioError;
+
+struct ComGuard {
+    initialized: bool,
+}
+
+impl ComGuard {
+    fn new() -> Self {
+        unsafe {
+            let res = CoInitializeEx(None, COINIT_MULTITHREADED);
+            Self {
+                initialized: res.is_ok(),
+            }
+        }
+    }
+}
+
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        if self.initialized {
+            unsafe {
+                CoUninitialize();
+            }
+        }
+    }
+}
+
+unsafe fn get_default_render_device() -> std::result::Result<IMMDevice, AudioError> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+            .map_err(AudioError::Com)?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)
+            .map_err(AudioError::Com)?;
+        Ok(device)
+    }
+}
+
+unsafe fn get_default_capture_device() -> std::result::Result<IMMDevice, AudioError> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+            .map_err(AudioError::Com)?;
+        let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
+            .map_err(AudioError::Com)?;
+        Ok(device)
+    }
+}
 
 pub struct WasapiManager;
 
@@ -25,11 +70,8 @@ impl WasapiManager {
         let mut sessions_list = Vec::new();
 
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(AudioError::Com)?;
-            let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)
-                .map_err(AudioError::Com)?;
+            let _com = ComGuard::new();
+            let device = get_default_render_device()?;
 
             let session_manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)
                 .map_err(AudioError::Com)?;
@@ -78,11 +120,8 @@ impl WasapiManager {
 
     pub fn set_process_volume(&self, target_pid: u32, volume_percent: f32) -> std::result::Result<(), AudioError> {
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(AudioError::Com)?;
-            let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)
-                .map_err(AudioError::Com)?;
+            let _com = ComGuard::new();
+            let device = get_default_render_device()?;
 
             if target_pid == 0 {
                 let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
@@ -160,11 +199,8 @@ unsafe impl Sync for PersistentMic {}
 impl PersistentMic {
     pub fn new() -> std::result::Result<Self, AudioError> {
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(AudioError::Com)?;
-            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
-                .map_err(AudioError::Com)?;
+            let _com = ComGuard::new();
+            let device = get_default_capture_device()?;
             let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
                 .map_err(AudioError::Com)?;
             
@@ -174,7 +210,7 @@ impl PersistentMic {
 
     pub fn set_mute(&self, mute: bool) -> std::result::Result<(), AudioError> {
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let _com = ComGuard::new();
             self.endpoint_volume.SetMute(mute, std::ptr::null())
                 .map_err(AudioError::Com)?;
         }
@@ -183,11 +219,8 @@ impl PersistentMic {
 
     pub fn refresh(&mut self) -> std::result::Result<(), AudioError> {
         unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(AudioError::Com)?;
-            let device = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole)
-                .map_err(AudioError::Com)?;
+            let _com = ComGuard::new();
+            let device = get_default_capture_device()?;
             let endpoint_volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
                 .map_err(AudioError::Com)?;
             
