@@ -1,5 +1,6 @@
 use eframe::egui;
 
+#[derive(Clone, Copy)]
 pub struct Theme {
     pub bg_dark: egui::Color32,
     pub bg_panel: egui::Color32,

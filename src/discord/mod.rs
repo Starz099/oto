@@ -20,8 +20,6 @@ pub struct DiscordClient {
     client_id: String,
 }
 
-const IPC_PATH: &str = r"\\.\pipe\discord-ipc-0";
-
 impl DiscordClient {
     pub fn new(client_id: String) -> Self {
         Self {
@@ -31,9 +29,32 @@ impl DiscordClient {
     }
 
     pub async fn connect(&mut self) -> Result<(), DiscordError> {
-        let mut pipe = ClientOptions::new()
-            .open(IPC_PATH)
-            .map_err(|e| DiscordError::Ipc(format!("Could not connect to Discord: {}", e)))?;
+        let mut pipe = None;
+        let mut last_error = None;
+
+        for i in 0..10 {
+            let path = format!(r"\\.\pipe\discord-ipc-{}", i);
+            match ClientOptions::new().open(&path) {
+                Ok(p) => {
+                    pipe = Some(p);
+                    break;
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        let mut pipe = match pipe {
+            Some(p) => p,
+            None => {
+                let err_msg = match last_error {
+                    Some(e) => format!("Could not connect to Discord: {}", e),
+                    None => "Could not connect to Discord: unknown error".to_string(),
+                };
+                return Err(DiscordError::Ipc(err_msg));
+            }
+        };
 
         let handshake = json!({
             "v": 1,
@@ -116,7 +137,7 @@ impl DiscordClient {
         Ok(code)
     }
 
-    pub async fn get_vc_users(&mut self, local_user_id: &str) -> Result<Vec<VcUser>, DiscordError> {
+    pub async fn get_vc_users(&mut self, local_user_id: &str) -> Result<Option<Vec<VcUser>>, DiscordError> {
         let pipe = self.pipe.as_mut().ok_or(DiscordError::NotConnected)?;
         let nonce = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -137,7 +158,7 @@ impl DiscordClient {
                 .map_err(|e| DiscordError::Ipc(e.to_string()))?;
 
             if res_json["cmd"] == "DISPATCH" { continue; }
-            if res_json["data"].is_null() { return Ok(vec![]); }
+            if res_json["data"].is_null() { return Ok(None); }
 
             let mut users = Vec::new();
             if let Some(voice_states) = res_json["data"]["voice_states"].as_array() {
@@ -151,7 +172,7 @@ impl DiscordClient {
                     users.push(VcUser { id, username, volume, mute });
                 }
             }
-            return Ok(users);
+            return Ok(Some(users));
         }
     }
 

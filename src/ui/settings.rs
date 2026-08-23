@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 impl MixerApp {
     pub(crate) fn show_settings_ui(&mut self, ui: &mut egui::Ui) {
-        let theme = theme::Theme::pastel_pink();
+        let theme = self.theme;
         ui.add_space(8.0);
         
         let mut config = (*self.config).clone();
@@ -101,6 +101,7 @@ impl MixerApp {
 
         if save_btn.clicked() {
             config.save();
+            self.update_keybinds_cache(&config);
             self.config = Arc::new(config.clone());
             if self.needs_restart {
                 self.restart_app();
@@ -161,6 +162,7 @@ impl MixerApp {
         }
 
         if config_changed {
+            self.update_keybinds_cache(&config);
             self.config = Arc::new(config);
         }
     }
