@@ -1,6 +1,6 @@
 [package]
 name = "oto"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 description = "A lightweight and fast, keyboard-first desktop audio mixer overlay written in Rust, featuring app-specific volume control and zero-latency global push-to-talk, currently supporting Discord."
 authors = ["Mayank"]

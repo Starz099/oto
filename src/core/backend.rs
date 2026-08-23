@@ -142,8 +142,12 @@ impl Backend {
                 }
                 _ = discord_poll.tick() => {
                     if discord_connected {
-                        if let Ok(users) = self.discord.get_vc_users(&local_user_id).await {
-                            let _ = self.tx_ui.send(AppMessage::UpdateDiscordUsers(users));
+                        if let Ok(users_opt) = self.discord.get_vc_users(&local_user_id).await {
+                            let (users, in_vc) = match users_opt {
+                                Some(u) => (u, true),
+                                None => (Vec::new(), false),
+                            };
+                            let _ = self.tx_ui.send(AppMessage::UpdateDiscordUsers(users, in_vc));
                         }
                     }
                 }

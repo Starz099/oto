@@ -65,6 +65,7 @@ pub struct MixerApp {
     pub(crate) original_hotkeys: crate::config::Hotkeys,
     pub(crate) theme: theme::Theme,
     pub(crate) keybinds_cache: CachedKeybinds,
+    pub(crate) is_in_discord_vc: bool,
 }
 
 impl MixerApp {
@@ -104,6 +105,7 @@ impl MixerApp {
                 accordion_close: None,
                 mute: None,
             },
+            is_in_discord_vc: false,
         };
         app.update_keybinds_cache(&config);
         app
@@ -248,8 +250,9 @@ impl eframe::App for MixerApp {
                         }
                     }
                 }
-                AppMessage::UpdateDiscordUsers(users) => {
+                AppMessage::UpdateDiscordUsers(users, in_vc) => {
                     self.discord_users = users;
+                    self.is_in_discord_vc = in_vc;
                 }
             }
         }

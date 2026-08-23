@@ -286,9 +286,12 @@ impl MixerApp {
                     
                     if is_discord && self.is_discord_accordion_open && index == self.selected_index {
                         ui.indent("discord_accordion", |ui| {
-                            if self.discord_users.is_empty() {
+                            if !self.is_in_discord_vc {
                                 ui.add_space(4.0);
                                 ui.label(egui::RichText::new("Not in a Voice Channel").color(theme.text_dim).small());
+                            } else if self.discord_users.is_empty() {
+                                ui.add_space(4.0);
+                                ui.label(egui::RichText::new("No one else in current VC").color(theme.text_dim).small());
                             } else {
                                 for (i, user) in self.discord_users.iter_mut().enumerate() {
                                     let is_user_selected = i == self.selected_discord_user_index;
