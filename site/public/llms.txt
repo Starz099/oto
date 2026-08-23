@@ -1,0 +1,37 @@
+# Oto Mixer
+
+Oto is a lightweight, keyboard-first desktop audio mixer overlay for Windows written in Rust. It allows users to control system audio and Discord voice channels using Vim-like keybindings without leaving the keyboard.
+
+## System Requirements & Technical Details
+- **Target OS**: Windows 10/11
+- **Programming Language**: Rust (native Windows API binding)
+- **Audio Engine**: WASAPI (Windows Audio Session API)
+- **Interface**: GPU-accelerated Overlay (via Egui)
+- **Memory Footprint**: < 10MB RAM
+- **CPU Footprint**: < 0.1% CPU when idle in background
+- **Licensing**: MIT License (100% Free and Open-Source)
+
+## Key Features
+- **Keyboard-First Mixing**: Control volume and muting of individual running applications directly via global hotkeys.
+- **Vim Motions**: Default navigation uses standard Vim motions (`H`/`J`/`K`/`L`/`M`/`G`/`GG`).
+- **Zero-Latency PTT**: Global system-level Push-to-Talk (Hold) and Toggle PTT support.
+- **Discord Integration**: Integrates directly with Discord voice channels to adjust individual speaker volumes locally over Named Pipe IPC.
+- **Local-Only (BYO App)**: Uses a "Bring Your Own App" architecture to bypass Discord API whitelisting. Requires setting up custom developer credentials (Client ID and Client Secret) to authorize the client.
+
+## Default Keybindings
+- **Toggle Overlay**: ` (Backtick)
+- **Navigate Down/Up**: `J` / `K`
+- **Adjust Volume Down/Up**: `H` / `L`
+- **Fast Volume Adjust**: `Shift` + `H` / `L` (Volume step size of 10% instead of 2%)
+- **Toggle Mute**: `M`
+- **Discord User List (Expand/Collapse)**: `Enter` / `Esc`
+- **Jump to Top/Bottom**: `GG` / `G`
+- **Toggle PTT Mode**: `T`
+- **Push-to-Talk (Hold)**: `V`
+
+## Setup Guide (Discord API)
+To authorize Discord IPC socket control, create a custom application:
+1. Create an application in the Discord Developer Portal (https://discord.com/developers/applications).
+2. In OAuth2 settings, add the redirect URI: `http://127.0.0.1`
+3. Copy the Client ID and Client Secret into Oto settings (Gear Icon ⚙) and save.
+4. Authorize the browser popup on application restart.
